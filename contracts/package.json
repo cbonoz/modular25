@@ -1,0 +1,17 @@
+{
+  "name": "forge-xrp23",
+  "version": "0.0.1",
+  "description": "Forge",
+  "license": "MIT",
+  "scripts": {
+    "build": "forge build"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^4.9.3",
+    "@typechain/ethers-v6": "^0.4.0",
+    "@types/chai": "^4.2.0",
+    "@types/mocha": ">=9.1.0",
+    "ts-node": ">=8.0.0",
+    "typechain": "^8.2.0"
+  }
+}
