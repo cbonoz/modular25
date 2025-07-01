@@ -292,19 +292,17 @@ function CreatePolicy() {
                                 />
                                 <h3 style={{ margin: '30px 0 40px 0', fontSize: '28px' }}>Create Reimbursement Policy</h3>
 
-                        {isConnected && chain && (
+                        {isConnected && chain && !CHAIN_MAP[chain.id] && (
                             <div style={{
                                 padding: '8px 12px',
                                 borderRadius: '4px',
-                                backgroundColor: CHAIN_MAP[chain.id] ? '#f6ffed' : '#fff2f0',
-                                border: `1px solid ${CHAIN_MAP[chain.id] ? '#b7eb8f' : '#ffb3b3'}`,
+                                backgroundColor: '#fff2f0',
+                                border: '1px solid #ffb3b3',
                                 fontSize: '12px',
                                 marginBottom: '10px'
                             }}>
                                 Connected to: <strong>{chain.name}</strong>
-                                {!CHAIN_MAP[chain.id] && (
-                                    <span style={{ color: '#ff4d4f' }}> (Unsupported)</span>
-                                )}
+                                <span style={{ color: '#ff4d4f' }}> (Unsupported)</span>
                             </div>
                         )}
 

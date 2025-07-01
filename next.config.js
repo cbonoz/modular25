@@ -1,9 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-    distDir: 'build',
     images: {
         unoptimized: true,
     },
+    // Remove custom distDir for Vercel compatibility
+    // distDir: 'build',
 }
 
 module.exports = nextConfig

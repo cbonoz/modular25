@@ -45,12 +45,20 @@ function ConnectButton({size='large', buttonType = 'primary', text = 'Connect Wa
   if (isConnected) {
     return (
       <div>
-        Connected to:&nbsp;
-        <a href={getExplorerUrl(network?.chain?.id, address)} target="_blank">{abbreviate(address)}</a>
-        <Button type="link" size={size} onClick={() => disconnect()}>Disconnect</Button>
+        {!showNetworkWarning && (
+          <div>
+            <a href={getExplorerUrl(network?.chain?.id, address)} target="_blank">{abbreviate(address)}</a>
+            <Button type="link" size={size} onClick={() => disconnect()}>Disconnect</Button>
+          </div>
+        )}
 
         {showNetworkWarning && (
-          <div style={{ marginTop: '10px' }}>
+          <div>
+            <div style={{ marginBottom: '10px' }}>
+              Connected to:&nbsp;
+              <a href={getExplorerUrl(network?.chain?.id, address)} target="_blank">{abbreviate(address)}</a>
+              <Button type="link" size={size} onClick={() => disconnect()}>Disconnect</Button>
+            </div>
             <div style={{ color: '#ff4d4f', fontSize: '12px' }}>
               Wrong network: {network?.chain?.name}
             </div>
