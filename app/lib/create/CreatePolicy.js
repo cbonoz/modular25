@@ -24,8 +24,8 @@ import {
     humanError,
     isEmpty,
     bytesToSize,
-} from '../util';
-import { uploadFiles } from '../util/stor';
+} from '../../util';
+import { uploadFiles } from '../../util/stor';
 import TextArea from 'antd/lib/input/TextArea';
 import {
     EXAMPLE_ITEM,
@@ -33,12 +33,12 @@ import {
     APP_NAME,
     CHAIN_MAP,
     MAX_FILE_SIZE_BYTES,
-} from '../constants';
-import { FileDrop } from './FileDrop';
-import { deployContract, fundContractWithUSDFC } from '../util/appContract';
+} from '../../constants';
+import { FileDrop } from '../FileDrop';
+import { deployContract, fundContractWithUSDFC } from '../../util/appContract';
 import { useAccount, useNetwork, useSwitchNetwork } from 'wagmi';
-import ConnectButton from './ConnectButton';
-import { useEthersSigner } from '../hooks/useEthersSigner';
+import ConnectButton from '../ConnectButton';
+import { useEthersSigner } from '../../hooks/useEthersSigner';
 import { InfoCircleOutlined } from '@ant-design/icons';
 import PolicyFormFields from './PolicyFormFields';
 
@@ -71,7 +71,7 @@ function CreatePolicy() {
                 setNetworkError(true);
                 setError(`Unsupported network. Please switch to ${ACTIVE_CHAIN.name}`);
             }
-            
+
             // Page is ready once we have network info
             setPageLoading(false);
         } else if (isConnected === false) {

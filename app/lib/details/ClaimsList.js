@@ -3,12 +3,12 @@
 import React from 'react';
 import { Card, Button } from 'antd';
 
-const ClaimsList = ({ 
-    claims, 
-    isOwnerView = false, 
+const ClaimsList = ({
+    claims,
+    isOwnerView = false,
     onProcessClaim,
     getStatusColor,
-    getStatusText 
+    getStatusText
 }) => {
     if (claims.length === 0) {
         return <p>{isOwnerView ? 'No claims submitted yet.' : 'No claims submitted yet.'}</p>;

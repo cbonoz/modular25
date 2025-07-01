@@ -47,9 +47,9 @@ const OwnerFundingCard = ({
                             </p>
                         </Col>
                     </Row>
-                    
+
                     <Divider />
-                    
+
                     <Row gutter={16}>
                         <Col span={8}>
                             <p><strong>Total Funded:</strong></p>
@@ -66,9 +66,9 @@ const OwnerFundingCard = ({
                             </p>
                         </Col>
                     </Row>
-                    
+
                     <Divider />
-                    
+
                     <div>
                         <p><strong>Fund Contract with USDFC:</strong></p>
                         <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '16px' }}>
@@ -90,7 +90,7 @@ const OwnerFundingCard = ({
                                 Fund Contract
                             </Button>
                         </div>
-                        
+
                         <p><strong>Withdraw USDFC from Contract:</strong></p>
                         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                             <Input

@@ -21,9 +21,9 @@ import {
     humanError,
     ipfsUrl,
     isEmpty,
-} from '../util';
-import { ACTIVE_CHAIN, CHAIN_MAP, MAX_FILE_SIZE_BYTES } from '../constants';
-import RenderObject from './RenderObject';
+} from '../../util';
+import { ACTIVE_CHAIN, CHAIN_MAP, MAX_FILE_SIZE_BYTES } from '../../constants';
+import RenderObject from '../RenderObject';
 
 // Import modular components
 import EmployeeClaimForm from './EmployeeClaimForm';
@@ -31,7 +31,7 @@ import PolicyInfoCard from './PolicyInfoCard';
 import OwnerFundingCard from './OwnerFundingCard';
 import ClaimsList from './ClaimsList';
 import ResultCard from './ResultCard';
-import { getStatusColor, getStatusText, RESULT_MESSAGES } from './PolicyConstants';
+import { getStatusColor, getStatusText, RESULT_MESSAGES } from '../../constants/PolicyConstants';
 
 import {
     submitClaim,
@@ -46,14 +46,14 @@ import {
     fundContractWithUSDFC,
     getFundingInfo,
     withdrawFromContract,
-} from '../util/appContract';
+} from '../../util/appContract';
 import { useAccount, useNetwork, useSwitchNetwork } from 'wagmi';
-import { useEthersSigner } from '../hooks/useEthersSigner';
-import ConnectButton from './ConnectButton';
-import { FileDrop } from './FileDrop';
+import { useEthersSigner } from '../../hooks/useEthersSigner';
+import ConnectButton from '../ConnectButton';
+import { FileDrop } from '../FileDrop';
 import TextArea from 'antd/es/input/TextArea';
 import { InfoCircleOutlined } from '@ant-design/icons';
-import { uploadFiles } from '../util/stor';
+import { uploadFiles } from '../../util/stor';
 
 const PolicyDetail = ({ uploadId }) => {
     const [loading, setLoading] = useState(false);
@@ -258,17 +258,17 @@ const PolicyDetail = ({ uploadId }) => {
     async function loadUSDFCData() {
         try {
             setUsdcLoading(true);
-            
+
             // Get contract USDFC balance
             const contractBalance = await getContractUSDFCBalance(signer, uploadId);
             setContractUSDFCBalance(contractBalance.toString());
-            
+
             // Get user USDFC balance
             if (address) {
                 const userBalance = await getUserUSDFCBalance(signer, address);
                 setUserUSDFCBalance(userBalance.toString());
             }
-            
+
             // Get funding info
             const funding = await getFundingInfo(signer, uploadId);
             setFundingInfo({
@@ -276,7 +276,7 @@ const PolicyDetail = ({ uploadId }) => {
                 totalReimbursed: funding.totalReimbursed.toString(),
                 remainingBalance: funding.remainingBalance.toString()
             });
-            
+
         } catch (e) {
             console.error('Error loading USDFC data', e);
         } finally {
@@ -335,10 +335,10 @@ const PolicyDetail = ({ uploadId }) => {
             } else {
                 await loadEmployeeClaims();
             }
-            
+
             // Load USDFC data after main policy data is loaded
             await loadUSDFCData();
-            
+
         } catch (e) {
             console.error('error getting policy data', e);
             alert('Error getting policy data: ' + humanError(e));
@@ -508,7 +508,7 @@ const PolicyDetail = ({ uploadId }) => {
                                 isOwner={isOwner}
                                 onUpdatePolicyStatus={handleUpdatePolicyStatus}
                             />
-                            
+
                             {/* USDFC Funding Section - Owner Only */}
                             {isOwner && (
                                 <OwnerFundingCard

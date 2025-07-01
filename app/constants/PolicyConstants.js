@@ -6,14 +6,14 @@ export const POLICY_CONSTANTS = {
         APPROVED: 1,
         REJECTED: 2
     },
-    
+
     STATUS_COLORS: {
         0: '#faad14', // Pending - yellow
         1: '#52c41a', // Approved - green
         2: '#ff4d4f', // Rejected - red
         default: '#d9d9d9'
     },
-    
+
     STATUS_TEXTS: {
         0: 'Pending',
         1: 'Approved',

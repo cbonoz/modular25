@@ -2,8 +2,8 @@
 
 import React from 'react';
 import { Card, Button } from 'antd';
-import { getExplorerUrl } from '../util';
-import { ACTIVE_CHAIN } from '../constants';
+import { getExplorerUrl } from '../../util';
+import { ACTIVE_CHAIN } from '../../constants';
 
 const PolicyInfoCard = ({ data, isOwner, onUpdatePolicyStatus }) => {
     return (
@@ -12,7 +12,7 @@ const PolicyInfoCard = ({ data, isOwner, onUpdatePolicyStatus }) => {
             <Card size="small">
                 <p><strong>Policy Name:</strong> {data?.name}</p>
                 <p><strong>Description:</strong> {data?.description}</p>
-                
+
                 {/* Show detailed business info only to owners */}
                 {isOwner && (
                     <>
@@ -21,7 +21,7 @@ const PolicyInfoCard = ({ data, isOwner, onUpdatePolicyStatus }) => {
                         <p><strong>Employee Count:</strong> {data?.policyParams?.employeeCount}</p>
                     </>
                 )}
-                
+
                 <p><strong>Max Amount:</strong> ${data?.policyParams?.maxAmount}</p>
                 <p><strong>Category:</strong> {data?.policyParams?.category}</p>
                 <p><strong>Status:</strong>
@@ -54,7 +54,7 @@ const PolicyInfoCard = ({ data, isOwner, onUpdatePolicyStatus }) => {
                         </Button>
                     )}
                 </p>
-                
+
                 {/* Show additional owner info only to owners */}
                 {isOwner && (
                     <>

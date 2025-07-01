@@ -12,8 +12,8 @@ import {
 } from 'antd';
 import { InfoCircleOutlined } from '@ant-design/icons';
 import TextArea from 'antd/es/input/TextArea';
-import { FileDrop } from './FileDrop';
-import { isEmpty } from '../util';
+import { FileDrop } from '../FileDrop';
+import { isEmpty } from '../../util';
 
 const EmployeeClaimForm = ({
     data,

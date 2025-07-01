@@ -1,6 +1,6 @@
 
 import React from 'react'
-import CreateUpload from '../lib/CreatePolicy'
+import CreateUpload from '../lib/create/CreatePolicy'
 
 export default function Create() {
     return (

@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { Card } from 'antd';
-import { RESULT_MESSAGES } from './PolicyConstants';
+import { RESULT_MESSAGES } from '../../constants/PolicyConstants';
 
 const ResultCard = ({ result }) => {
     if (!result) return null;

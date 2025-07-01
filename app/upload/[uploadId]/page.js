@@ -1,7 +1,7 @@
 'use client'
 
 import { Breadcrumb, Spin } from "antd"
-import PolicyDetail from "../../lib/PolicyDetail"
+import PolicyDetail from "../../lib/details/PolicyDetail"
 import React, { useState, useEffect } from "react"
 
 
