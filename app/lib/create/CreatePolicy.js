@@ -213,7 +213,18 @@ function CreatePolicy() {
             setResult(res);
         } catch (e) {
             console.error('error creating reimbursement policy', e);
-            setError(humanError(e));
+            
+            // Provide specific error messages for common issues
+            let errorMessage = humanError(e);
+            
+            // Additional context for gas estimation failures
+            if (e.message && (e.message.includes('failed to estimate gas') || 
+                             e.message.includes('ApplyWithGasOnState failed') ||
+                             e.message.includes('actor not found'))) {
+                errorMessage = 'Unable to create policy. Please ensure your wallet has sufficient funds for gas fees and try again. If you just funded your wallet, wait a moment for the transaction to confirm.';
+            }
+            
+            setError(errorMessage);
         } finally {
             setLoading(false);
         }

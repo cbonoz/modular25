@@ -341,7 +341,7 @@ const PolicyDetail = ({ uploadId }) => {
 
         } catch (e) {
             console.error('error getting policy data', e);
-            alert('Error getting policy data: ' + humanError(e));
+            setError('Contract or policy could not be found. Please verify the contract address and try again.');
         } finally {
             setLoading(false);
         }
@@ -358,7 +358,7 @@ const PolicyDetail = ({ uploadId }) => {
         if (data) {
             return `${isOwner ? 'Policy Management' : 'Employee Portal'}: ${data.name}`;
         } else if (error) {
-            return 'Error: ' + humanError(error);
+            return 'Policy Not Found';
         } else {
             return 'Loading...';
         }
@@ -491,6 +491,83 @@ const PolicyDetail = ({ uploadId }) => {
                             Fetching contract data and USDFC balances
                         </p>
                     </div>
+                ) : error && !data ? (
+                    <div style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        minHeight: '400px',
+                        textAlign: 'center',
+                        padding: '40px'
+                    }}>
+                        <div style={{ fontSize: '48px', marginBottom: '20px' }}>🔍</div>
+                        <h3 style={{ color: '#ff4d4f', marginBottom: '16px' }}>Policy Not Found</h3>
+                        <p style={{ color: '#666', fontSize: '16px', marginBottom: '24px', maxWidth: '500px' }}>
+                            The contract or policy could not be found. This might happen if:
+                        </p>
+                        <ul style={{
+                            textAlign: 'left',
+                            color: '#666',
+                            fontSize: '14px',
+                            marginBottom: '24px',
+                            listStyle: 'none',
+                            padding: 0
+                        }}>
+                            <li style={{ marginBottom: '8px' }}>• The policy link is incorrect or expired</li>
+                            <li style={{ marginBottom: '8px' }}>• The policy is still being created</li>
+                            <li style={{ marginBottom: '8px' }}>• Your wallet is connected to the wrong blockchain</li>
+                            <li style={{ marginBottom: '8px' }}>• The policy creation was unsuccessful</li>
+                        </ul>
+                        <div style={{ display: 'flex', gap: '12px' }}>
+                            <Button
+                                type="primary"
+                                onClick={() => window.location.reload()}
+                            >
+                                Retry
+                            </Button>
+                            <Button
+                                type="default"
+                                onClick={() => window.location.href = '/'}
+                            >
+                                Go Home
+                            </Button>
+                        </div>
+                        {networkError && isConnected && chain && !CHAIN_MAP[chain.id] && (
+                            <div style={{
+                                marginTop: '24px',
+                                padding: '16px',
+                                border: '1px solid #ff4d4f',
+                                borderRadius: '6px',
+                                backgroundColor: '#fff2f0',
+                                maxWidth: '400px'
+                            }}>
+                                <div style={{ marginBottom: '10px', color: '#ff4d4f', fontWeight: 'bold' }}>
+                                    Wrong Network Detected
+                                </div>
+                                <div style={{ marginBottom: '15px', fontSize: '14px' }}>
+                                    You're connected to <strong>{chain.name}</strong>.<br />
+                                    This app requires <strong>{ACTIVE_CHAIN.name}</strong>.
+                                </div>
+                                <Button
+                                    type="primary"
+                                    danger
+                                    loading={isSwitching}
+                                    onClick={async () => {
+                                        try {
+                                            console.log('Switching to network:', ACTIVE_CHAIN.id, ACTIVE_CHAIN);
+                                            await switchNetwork?.(ACTIVE_CHAIN.id);
+                                        } catch (error) {
+                                            console.error('Network switch failed:', error);
+                                        }
+                                    }}
+                                    style={{ width: '100%' }}
+                                >
+                                    {isSwitching ? 'Switching...' : `Switch to ${ACTIVE_CHAIN.name}`}
+                                </Button>
+                            </div>
+                        )}
+                    </div>
                 ) : (
                     <>
                         <Row
@@ -564,50 +641,11 @@ const PolicyDetail = ({ uploadId }) => {
                             <ResultCard result={result} />
                         )}
 
-                        {error && (
+                        {error && data && (
                             <div className="error-text">
                                 <div style={{ marginBottom: '15px' }}>
                                     Error: {error}
                                 </div>
-                                {networkError && isConnected && chain && !CHAIN_MAP[chain.id] && (
-                                    <div style={{
-                                        padding: '15px',
-                                        border: '1px solid #ff4d4f',
-                                        borderRadius: '6px',
-                                        backgroundColor: '#fff2f0',
-                                        textAlign: 'center'
-                                    }}>
-                                        <div style={{ marginBottom: '10px', color: '#ff4d4f' }}>
-                                            <strong>Wrong Network Detected</strong>
-                                        </div>
-                                        <div style={{ marginBottom: '15px', fontSize: '14px' }}>
-                                            You're connected to <strong>{chain.name}</strong>.<br />
-                                            This app requires <strong>{ACTIVE_CHAIN.name}</strong>.
-                                        </div>
-                                        <Button
-                                            type="primary"
-                                            danger
-                                            size="large"
-                                            loading={isSwitching}
-                                            onClick={async () => {
-                                                try {
-                                                    console.log('Switching to network:', ACTIVE_CHAIN.id, ACTIVE_CHAIN);
-                                                    await switchNetwork?.(ACTIVE_CHAIN.id);
-                                                } catch (error) {
-                                                    console.error('Network switch failed:', error);
-                                                    // Fallback: show manual instructions
-                                                    alert(`Failed to switch networks automatically. Please manually switch to ${ACTIVE_CHAIN.name} in your wallet.`);
-                                                }
-                                            }}
-                                            style={{ minWidth: '200px' }}
-                                        >
-                                            {isSwitching ? 'Switching...' : `Switch to ${ACTIVE_CHAIN.name}`}
-                                        </Button>
-                                        <div style={{ marginTop: '10px', fontSize: '12px', color: '#666' }}>
-                                            If the button doesn't work, please switch networks manually in your wallet.
-                                        </div>
-                                    </div>
-                                )}
                             </div>
                         )}
                     </Col>
