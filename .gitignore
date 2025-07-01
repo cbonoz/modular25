@@ -2,3 +2,4 @@ node_modules
 build
 dist
 README2.md
+contracts/out

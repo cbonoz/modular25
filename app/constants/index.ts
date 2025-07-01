@@ -38,3 +38,7 @@ export const EXAMPLE_ITEM = {
 export const IPFS_BASE_URL = 'https://ipfs.io/ipfs';
 
 export const MAX_FILE_SIZE_BYTES = 5000000; // 5MB
+
+// USDFC token address on Filecoin Calibration testnet
+// Using a placeholder for now - replace with actual USDFC token address when available
+export const USDFC_TOKEN_ADDRESS = '0x0000000000000000000000000000000000000001'; // TODO: Replace with actual USDFC address

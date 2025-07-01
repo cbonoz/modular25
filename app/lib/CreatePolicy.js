@@ -15,9 +15,10 @@ import {
     Tooltip,
     Select,
     Switch,
+    Spin,
 } from 'antd';
 import {
-    uploadUrl,
+    policyUrl,
     ipfsUrl,
     getExplorerUrl,
     humanError,
@@ -34,11 +35,12 @@ import {
     MAX_FILE_SIZE_BYTES,
 } from '../constants';
 import { FileDrop } from './FileDrop';
-import { deployContract } from '../util/appContract';
+import { deployContract, fundContractWithUSDFC } from '../util/appContract';
 import { useAccount, useNetwork, useSwitchNetwork } from 'wagmi';
 import ConnectButton from './ConnectButton';
 import { useEthersSigner } from '../hooks/useEthersSigner';
 import { InfoCircleOutlined } from '@ant-design/icons';
+import PolicyFormFields from './PolicyFormFields';
 
 function CreatePolicy() {
     const { address, isConnected } = useAccount();
@@ -51,8 +53,10 @@ function CreatePolicy() {
     const [data, setData] = useState({});
     const [error, setError] = useState();
     const [loading, setLoading] = useState(false);
+    const [pageLoading, setPageLoading] = useState(true);
     const [result, setResult] = useState();
     const [networkError, setNetworkError] = useState(false);
+    const [initialFunding, setInitialFunding] = useState('0');
 
     // Handle network changes
     useEffect(() => {
@@ -61,14 +65,30 @@ function CreatePolicy() {
             // Clear any existing errors when network changes
             setError(undefined);
             setNetworkError(false);
-            
+
             // Check if we're on the supported network
             if (!CHAIN_MAP[chain.id]) {
                 setNetworkError(true);
                 setError(`Unsupported network. Please switch to ${ACTIVE_CHAIN.name}`);
             }
+            
+            // Page is ready once we have network info
+            setPageLoading(false);
+        } else if (isConnected === false) {
+            // User is not connected, page is ready to show connect button
+            setPageLoading(false);
         }
     }, [chain?.id, isConnected]);
+
+    // Initial page load effect
+    useEffect(() => {
+        // Set a timeout to stop loading after 3 seconds even if wallet doesn't connect
+        const timeout = setTimeout(() => {
+            setPageLoading(false);
+        }, 3000);
+
+        return () => clearTimeout(timeout);
+    }, []);
 
     const setDemo = () => setData({
         name: 'Remote Work Internet Reimbursement Policy',
@@ -165,10 +185,24 @@ function CreatePolicy() {
 
             res['cid'] = cid;
             res['contract'] = contract.address;
-            res['uploadUrl'] = uploadUrl(contract.address || cid);
+            res['policyUrl'] = policyUrl(contract.address || cid);
             res['contractUrl'] = getExplorerUrl(activeChain, contract.address);
 
-            // 3) Store additional metadata locally (optional)
+            // 3) Fund contract with initial USDFC if specified
+            if (initialFunding && parseFloat(initialFunding) > 0) {
+                try {
+                    const { ethers } = await import('ethers');
+                    const fundingAmount = ethers.utils.parseEther(initialFunding);
+                    await fundContractWithUSDFC(signer, contract.address, fundingAmount);
+                    res['initialFunding'] = initialFunding;
+                    console.log('Contract funded with', initialFunding, 'USDFC');
+                } catch (fundingError) {
+                    console.warn('Contract deployed but funding failed:', fundingError);
+                    res['fundingError'] = humanError(fundingError);
+                }
+            }
+
+            // 4) Store additional metadata locally (optional)
             const policyData = {
                 ...data,
                 address: contract.address,
@@ -221,22 +255,47 @@ function CreatePolicy() {
 
     return (
         <div>
-            <Row>
-                <Col span={24}>
-                    <div className="centered">
-                        <Image
-                            className='pb-2 mb-2'
-                            src="logo.png"
-                            alt="Cleared Logo"
-                            width={180}
-                            height={37}
-                        />
-                        <h3 style={{ margin: '30px 0 40px 0', fontSize: '28px' }}>Create Reimbursement Policy</h3>
-                        
+            {pageLoading ? (
+                <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    minHeight: '60vh',
+                    textAlign: 'center'
+                }}>
+                    <Image
+                        className='pb-2 mb-2'
+                        src="logo.png"
+                        alt="Cleared Logo"
+                        width={180}
+                        height={37}
+                    />
+                    <br />
+                    <Spin size="large" />
+                    <h3 style={{ margin: '20px 0', color: '#666' }}>Loading Policy Creation Portal...</h3>
+                    <p style={{ color: '#999', fontSize: '14px' }}>
+                        Checking wallet connection and network status
+                    </p>
+                </div>
+            ) : (
+                <>
+                    <Row>
+                        <Col span={24}>
+                            <div className="centered">
+                                <Image
+                                    className='pb-2 mb-2'
+                                    src="logo.png"
+                                    alt="Cleared Logo"
+                                    width={180}
+                                    height={37}
+                                />
+                                <h3 style={{ margin: '30px 0 40px 0', fontSize: '28px' }}>Create Reimbursement Policy</h3>
+
                         {isConnected && chain && (
-                            <div style={{ 
-                                padding: '8px 12px', 
-                                borderRadius: '4px', 
+                            <div style={{
+                                padding: '8px 12px',
+                                borderRadius: '4px',
                                 backgroundColor: CHAIN_MAP[chain.id] ? '#f6ffed' : '#fff2f0',
                                 border: `1px solid ${CHAIN_MAP[chain.id] ? '#b7eb8f' : '#ffb3b3'}`,
                                 fontSize: '12px',
@@ -248,7 +307,7 @@ function CreatePolicy() {
                                 )}
                             </div>
                         )}
-                        
+
                         <br />
                         <br />
                     </div>
@@ -274,112 +333,16 @@ function CreatePolicy() {
                                 </a>
                                 <Divider />
 
-                                <h4>Policy Name</h4>
-                                <Input
-                                    placeholder="e.g., Remote Work Internet Reimbursement Policy"
-                                    value={data.name}
-                                    onChange={(e) =>
-                                        updateData('name', e.target.value)
-                                    }
+                                <PolicyFormFields
+                                    data={data}
+                                    updateData={updateData}
+                                    initialFunding={initialFunding}
+                                    setInitialFunding={setInitialFunding}
+                                    userUSDFCBalance="0"
                                 />
+
                                 <br />
-                                <br />
-                                <h4>Policy Description</h4>
-                                <TextArea
-                                    aria-label="Policy Description"
-                                    onChange={(e) =>
-                                        updateData(
-                                            'description',
-                                            e.target.value
-                                        )
-                                    }
-                                    placeholder="Describe the reimbursement rules and conditions (e.g., Up to 50% of monthly internet costs for remote employees, maximum $100/month)"
-                                    prefix="Description"
-                                    value={data.description}
-                                />
-                                <br />
-                                <br />
-                                <h4>Business Type</h4>
-                                <Select
-                                    placeholder="Select your business type"
-                                    style={{ width: '100%' }}
-                                    value={data.businessType}
-                                    onChange={(value) => updateData('businessType', value)}
-                                    options={[
-                                        { value: 'technology', label: 'Technology' },
-                                        { value: 'healthcare', label: 'Healthcare' },
-                                        { value: 'finance', label: 'Finance' },
-                                        { value: 'retail', label: 'Retail' },
-                                        { value: 'manufacturing', label: 'Manufacturing' },
-                                        { value: 'consulting', label: 'Consulting' },
-                                        { value: 'other', label: 'Other' }
-                                    ]}
-                                />
-                                <br />
-                                <br />
-                                <h4>Business Location</h4>
-                                <Select
-                                    placeholder="Select your business location"
-                                    style={{ width: '100%' }}
-                                    value={data.location}
-                                    onChange={(value) => updateData('location', value)}
-                                    options={[
-                                        { value: 'california', label: 'California, USA' },
-                                        { value: 'new-york', label: 'New York, USA' },
-                                        { value: 'texas', label: 'Texas, USA' },
-                                        { value: 'florida', label: 'Florida, USA' },
-                                        { value: 'washington', label: 'Washington, USA' },
-                                        { value: 'other-us', label: 'Other US State' },
-                                        { value: 'international', label: 'International' }
-                                    ]}
-                                />
-                                <br />
-                                <br />
-                                <h4>Number of Employees</h4>
-                                <Select
-                                    placeholder="Select company size"
-                                    style={{ width: '100%' }}
-                                    value={data.employeeCount}
-                                    onChange={(value) => updateData('employeeCount', value)}
-                                    options={[
-                                        { value: '1-10', label: '1-10 employees' },
-                                        { value: '11-50', label: '11-50 employees' },
-                                        { value: '51-200', label: '51-200 employees' },
-                                        { value: '201-1000', label: '201-1000 employees' },
-                                        { value: '1000+', label: '1000+ employees' }
-                                    ]}
-                                />
-                                <br />
-                                <br />
-                                <h4>Maximum Reimbursement Amount (USD)</h4>
-                                <Input
-                                    type="number"
-                                    placeholder="e.g., 100"
-                                    value={data.maxAmount}
-                                    onChange={(e) =>
-                                        updateData('maxAmount', e.target.value)
-                                    }
-                                />
-                                <br />
-                                <br />
-                                <h4>Reimbursement Category</h4>
-                                <Select
-                                    placeholder="Select reimbursement category"
-                                    style={{ width: '100%' }}
-                                    value={data.category}
-                                    onChange={(value) => updateData('category', value)}
-                                    options={[
-                                        { value: 'internet', label: 'Internet/Utilities' },
-                                        { value: 'phone', label: 'Phone/Mobile' },
-                                        { value: 'office-supplies', label: 'Office Supplies' },
-                                        { value: 'travel', label: 'Travel Expenses' },
-                                        { value: 'training', label: 'Training/Education' },
-                                        { value: 'health', label: 'Health/Wellness' },
-                                        { value: 'other', label: 'Other' }
-                                    ]}
-                                />
-                                <br />
-                                <br />
+
                                 <h4>Company Administrator</h4>
                                 <Input
                                     placeholder={'Company administrator wallet address'}
@@ -439,8 +402,8 @@ function CreatePolicy() {
 
                                 {networkError && (
                                     <div style={{ marginTop: '10px' }}>
-                                        <Button 
-                                            type="default" 
+                                        <Button
+                                            type="default"
                                             onClick={() => window.location.reload()}
                                             size="small"
                                         >
@@ -463,10 +426,10 @@ function CreatePolicy() {
                                     Error: {error}
                                 </div>
                                 {networkError && isConnected && chain && !CHAIN_MAP[chain.id] && (
-                                    <div style={{ 
-                                        padding: '15px', 
-                                        border: '1px solid #ff4d4f', 
-                                        borderRadius: '6px', 
+                                    <div style={{
+                                        padding: '15px',
+                                        border: '1px solid #ff4d4f',
+                                        borderRadius: '6px',
                                         backgroundColor: '#fff2f0',
                                         textAlign: 'center'
                                     }}>
@@ -477,8 +440,8 @@ function CreatePolicy() {
                                             You're connected to <strong>{chain.name}</strong>.<br />
                                             This app requires <strong>{ACTIVE_CHAIN.name}</strong>.
                                         </div>
-                                        <Button 
-                                            type="primary" 
+                                        <Button
+                                            type="primary"
                                             danger
                                             size="large"
                                             loading={isSwitching}
@@ -521,7 +484,7 @@ function CreatePolicy() {
                                         <p>Share this link with your employees to submit reimbursement requests:</p>
                                         <br />
                                         <a
-                                            href={result.uploadUrl}
+                                            href={result.policyUrl}
                                             target="_blank"
                                             style={{
                                                 background: '#f0f2f5',
@@ -533,16 +496,25 @@ function CreatePolicy() {
                                                 marginBottom: '10px'
                                             }}
                                         >
-                                            {result.uploadUrl}
+                                            {result.policyUrl}
                                         </a>
-                                        <br />
-                                        <p><strong>Policy Details:</strong></p>
-                                        <ul>
-                                            <li>Category: {data.category}</li>
-                                            <li>Max Amount: ${data.maxAmount} USD</li>
-                                            <li>Business Type: {data.businessType}</li>
-                                            <li>Location: {data.location}</li>
-                                        </ul>
+                                        <br />                        <p><strong>Policy Details:</strong></p>
+                        <ul>
+                            <li>Category: {data.category}</li>
+                            <li>Max Amount: ${data.maxAmount} USD</li>
+                            <li>Business Type: {data.businessType}</li>
+                            <li>Location: {data.location}</li>
+                            {result.initialFunding && (
+                                <li style={{ color: '#52c41a', fontWeight: 'bold' }}>
+                                    ✅ Initial Funding: {result.initialFunding} USDFC
+                                </li>
+                            )}
+                            {result.fundingError && (
+                                <li style={{ color: '#ff4d4f' }}>
+                                    ⚠️ Funding Error: {result.fundingError}
+                                </li>
+                            )}
+                        </ul>
                                     </div>
                                 </div>
                             </div>
@@ -588,6 +560,8 @@ function CreatePolicy() {
                     </div>
                 </Col>
             </Row>
+                </>
+            )}
         </div>
     );
 }

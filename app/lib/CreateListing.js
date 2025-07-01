@@ -17,7 +17,7 @@ import {
     Switch,
 } from 'antd';
 import {
-    uploadUrl,
+    policyUrl,
     ipfsUrl,
     getExplorerUrl,
     humanError,
@@ -140,7 +140,7 @@ function CreateListing() {
 
             res['cid'] = cid;
             res['contract'] = contract.address;
-            res['uploadUrl'] = uploadUrl(contract.address || cid);
+            res['policyUrl'] = policyUrl(contract.address || cid);
             res['contractUrl'] = getExplorerUrl(activeChain, contract.address);
 
             // 3) Store additional metadata locally (optional)
@@ -422,7 +422,7 @@ function CreateListing() {
                                         <p>Share this link with your employees to submit reimbursement requests:</p>
                                         <br />
                                         <a
-                                            href={result.uploadUrl}
+                                            href={result.policyUrl}
                                             target="_blank"
                                             style={{
                                                 background: '#f0f2f5',
@@ -434,7 +434,7 @@ function CreateListing() {
                                                 marginBottom: '10px'
                                             }}
                                         >
-                                            {result.uploadUrl}
+                                            {result.policyUrl}
                                         </a>
                                         <br />
                                         <p><strong>Policy Details:</strong></p>

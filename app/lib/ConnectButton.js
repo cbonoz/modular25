@@ -17,7 +17,7 @@ function ConnectButton({size='large', buttonType = 'primary', text = 'Connect Wa
   const [showNetworkWarning, setShowNetworkWarning] = useState(false)
 
   const network = useNetwork()
-  
+
   useEffect(() => {
     if (connectOnMount) {
       connect()
@@ -48,15 +48,15 @@ function ConnectButton({size='large', buttonType = 'primary', text = 'Connect Wa
         Connected to:&nbsp;
         <a href={getExplorerUrl(network?.chain?.id, address)} target="_blank">{abbreviate(address)}</a>
         <Button type="link" size={size} onClick={() => disconnect()}>Disconnect</Button>
-        
+
         {showNetworkWarning && (
           <div style={{ marginTop: '10px' }}>
             <div style={{ color: '#ff4d4f', fontSize: '12px' }}>
               Wrong network: {network?.chain?.name}
             </div>
-            <Button 
-              type="dashed" 
-              size="small" 
+            <Button
+              type="dashed"
+              size="small"
               onClick={handleSwitchNetwork}
               loading={isLoading}
               style={{ marginTop: '5px' }}
@@ -68,7 +68,7 @@ function ConnectButton({size='large', buttonType = 'primary', text = 'Connect Wa
       </div>
     )
   }
-  
+
   return <Button type={buttonType} size={size} onClick={() => connect()}>{text}</Button>
 }
 

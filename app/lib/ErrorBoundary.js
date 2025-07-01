@@ -20,7 +20,7 @@ class ErrorBoundary extends React.Component {
 
     render() {
         if (this.state.hasError) {
-            const isNetworkError = this.state.error?.message?.includes('network') || 
+            const isNetworkError = this.state.error?.message?.includes('network') ||
                                  this.state.error?.message?.includes('Network') ||
                                  this.state.error?.message?.includes('chain');
 
@@ -29,7 +29,7 @@ class ErrorBoundary extends React.Component {
                     <Alert
                         message={isNetworkError ? "Network Error" : "Something went wrong"}
                         description={
-                            isNetworkError 
+                            isNetworkError
                                 ? "The network configuration has changed. Please refresh the page to continue."
                                 : "An unexpected error occurred. Please refresh the page and try again."
                         }
@@ -37,8 +37,8 @@ class ErrorBoundary extends React.Component {
                         showIcon
                         style={{ marginBottom: '20px' }}
                     />
-                    <Button 
-                        type="primary" 
+                    <Button
+                        type="primary"
                         icon={<ReloadOutlined />}
                         onClick={() => window.location.reload()}
                     >

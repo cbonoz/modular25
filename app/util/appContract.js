@@ -1,6 +1,7 @@
 import { ethers } from 'ethers';
 import { CLEARED_CONTRACT } from './metadata';
 import { formatDate } from '.';
+import { USDFC_TOKEN_ADDRESS } from '../constants';
 
 export async function deployContract(
     signer,
@@ -33,7 +34,7 @@ export async function deployContract(
             // gasLimit: 3000000,
             // gasPrice: 10000000000,
         };
-        
+
         console.log(
             'Deploying reimbursement policy contract...',
             policyName,
@@ -42,7 +43,9 @@ export async function deployContract(
             location,
             employeeCount,
             maxAmount,
-            category
+            category,
+            'USDFC Address:',
+            USDFC_TOKEN_ADDRESS
         );
 
         const contract = await factory.deploy(
@@ -52,7 +55,8 @@ export async function deployContract(
             location,
             employeeCount,
             parseInt(maxAmount), // Convert to integer instead of using parseUnits
-            category
+            category,
+            USDFC_TOKEN_ADDRESS // Add USDFC token address as the last parameter
         );
 
         await contract.deployed();
@@ -60,20 +64,20 @@ export async function deployContract(
         return contract;
     } catch (error) {
         console.error('Contract deployment error:', error);
-        
+
         // Check for common network-related errors
         if (error.message.includes('network changed') || error.message.includes('Network')) {
             throw new Error('Network changed during deployment. Please refresh the page and try again.');
         }
-        
+
         if (error.message.includes('user rejected')) {
             throw new Error('Transaction was rejected by user.');
         }
-        
+
         if (error.message.includes('insufficient funds')) {
             throw new Error('Insufficient funds for gas fees.');
         }
-        
+
         // Re-throw the original error if it's not a known network issue
         throw error;
     }
@@ -167,6 +171,118 @@ export const updatePolicyStatus = async (signer, address, isActive) => {
     console.log('updating policy status', isActive);
     const result = await contract.updatePolicyStatus(isActive);
     console.log('update policy status result', result);
-    await result.wait();
     return result;
+};
+
+// USDFC-related functions
+
+// Get USDFC balance of the contract
+export const getContractUSDFCBalance = async (signer, contractAddress) => {
+    try {
+        const contract = new ethers.Contract(contractAddress, CLEARED_CONTRACT.abi, signer);
+        const balance = await contract.getContractBalance();
+        console.log('Contract USDFC balance:', balance.toString());
+        return balance;
+    } catch (error) {
+        console.error('Error getting contract USDFC balance:', error);
+        throw error;
+    }
+};
+
+// Get user's USDFC balance
+export const getUserUSDFCBalance = async (signer, userAddress) => {
+    try {
+        const contract = new ethers.Contract(USDFC_TOKEN_ADDRESS, [
+            'function balanceOf(address account) external view returns (uint256)'
+        ], signer);
+
+        const balance = await contract.balanceOf(userAddress);
+        console.log('User USDFC balance:', balance.toString());
+        return balance;
+    } catch (error) {
+        console.error('Error getting user USDFC balance:', error);
+        throw error;
+    }
+};
+
+// Fund contract with USDFC
+export const fundContractWithUSDFC = async (signer, contractAddress, amount) => {
+    try {
+        // First approve the contract to spend USDFC
+        const usdtcContract = new ethers.Contract(USDFC_TOKEN_ADDRESS, [
+            'function approve(address spender, uint256 amount) external returns (bool)',
+            'function transfer(address to, uint256 amount) external returns (bool)',
+            'function transferFrom(address from, address to, uint256 amount) external returns (bool)'
+        ], signer);
+
+        console.log('Approving USDFC spend for contract:', contractAddress, 'amount:', amount.toString());
+        const approveTx = await usdtcContract.approve(contractAddress, amount);
+        await approveTx.wait();
+        console.log('USDFC approval confirmed');
+
+        // Use the contract's fundContract function
+        const contract = new ethers.Contract(contractAddress, CLEARED_CONTRACT.abi, signer);
+        console.log('Funding contract through fundContract function...');
+        const fundTx = await contract.fundContract(amount);
+        await fundTx.wait();
+        console.log('Contract funding confirmed');
+
+        return fundTx;
+    } catch (error) {
+        console.error('Error funding contract with USDFC:', error);
+        if (error.message.includes('user rejected')) {
+            throw new Error('Transaction was rejected by user.');
+        }
+        if (error.message.includes('insufficient balance')) {
+            throw new Error('Insufficient USDFC balance.');
+        }
+        throw error;
+    }
+};
+
+// Withdraw USDFC from contract (owner only)
+export const withdrawFromContract = async (signer, contractAddress, amount) => {
+    try {
+        const contract = new ethers.Contract(contractAddress, CLEARED_CONTRACT.abi, signer);
+
+        console.log('Withdrawing from contract:', contractAddress, 'amount:', amount.toString());
+        const withdrawTx = await contract.withdrawFunds(amount);
+        await withdrawTx.wait();
+        console.log('Withdrawal confirmed');
+
+        return withdrawTx;
+    } catch (error) {
+        console.error('Error withdrawing from contract:', error);
+        if (error.message.includes('user rejected')) {
+            throw new Error('Transaction was rejected by user.');
+        }
+        if (error.message.includes('Insufficient contract balance')) {
+            throw new Error('Insufficient contract balance for withdrawal.');
+        }
+        if (error.message.includes('Only policy owner')) {
+            throw new Error('Only the policy owner can withdraw funds.');
+        }
+        throw error;
+    }
+};
+
+// Get funding and reimbursement totals
+export const getFundingInfo = async (signer, contractAddress) => {
+    try {
+        const contract = new ethers.Contract(contractAddress, CLEARED_CONTRACT.abi, signer);
+
+        const totalFunded = await contract.totalFunded();
+        const totalReimbursed = await contract.totalReimbursed();
+
+        console.log('Funding info - Total funded:', totalFunded.toString(), 'Total reimbursed:', totalReimbursed.toString());
+
+        return {
+            totalFunded,
+            totalReimbursed,
+            remainingBalance: totalFunded.sub(totalReimbursed)
+        };
+    } catch (error) {
+        console.error('Error getting funding info:', error);
+        throw error;
+    }
 };

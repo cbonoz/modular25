@@ -34,6 +34,12 @@
     "**/*.tsx"
   ],
   "exclude": [
+    "contracts/out",
+    "contracts/coverage",
+    "contracts/artifacts",
+    "contracts/cache",
+    "contracts/tests",
+    "contracts/scripts",
     "node_modules",
     "build",
     "dist",

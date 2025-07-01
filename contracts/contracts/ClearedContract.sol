@@ -1,12 +1,24 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
+// IERC20 interface for USDFC token interactions
+interface IERC20 {
+    function transfer(address to, uint256 amount) external returns (bool);
+    function transferFrom(address from, address to, uint256 amount) external returns (bool);
+    function balanceOf(address account) external view returns (uint256);
+    function approve(address spender, uint256 amount) external returns (bool);
+}
+
 contract ClearedContract {
+    // USDFC token contract address on Filecoin Calibration
+    // This would be the actual USDFC contract address when deployed
+    IERC20 public immutable usdfc;
+
     // Struct to represent a reimbursement claim
     struct ReimbursementClaim {
         address employee;
         bytes32 receiptHash;
-        uint256 amount;
+        uint256 amount; // Amount in USDFC (scaled by 18 decimals)
         string category;
         string description;
         uint timestamp;
@@ -20,7 +32,7 @@ contract ClearedContract {
         string businessType;
         string location;
         string employeeCount;
-        uint256 maxAmount;
+        uint256 maxAmount; // Maximum amount in USDFC (scaled by 18 decimals)
         string category;
         bool isActive;
     }
@@ -41,10 +53,17 @@ contract ClearedContract {
     mapping(uint256 => ReimbursementClaim) public claims;
     mapping(address => uint256[]) public employeeClaims;
 
+    // Funding tracking
+    uint256 public totalFunded = 0;
+    uint256 public totalReimbursed = 0;
+
     // Events
     event PolicyCreated(address owner, string policyName, uint256 maxAmount, string category);
     event ClaimSubmitted(uint256 claimId, address employee, uint256 amount, string category);
     event ClaimProcessed(uint256 claimId, ClaimStatus status, string reason);
+    event ReimbursementPaid(uint256 claimId, address employee, uint256 amount);
+    event PolicyFunded(address funder, uint256 amount);
+    event FundsWithdrawn(address owner, uint256 amount);
 
     constructor(
         string memory _policyName,
@@ -53,9 +72,13 @@ contract ClearedContract {
         string memory _location,
         string memory _employeeCount,
         uint256 _maxAmount,
-        string memory _category
+        string memory _category,
+        address _usdfc
     ) {
+        require(_usdfc != address(0), "USDFC token address cannot be zero");
+
         owner = msg.sender;
+        usdfc = IERC20(_usdfc);
         policyName = _policyName;
         policyDescription = _policyDescription;
 
@@ -127,6 +150,19 @@ contract ClearedContract {
         claim.status = _status;
         if (_status == ClaimStatus.Rejected) {
             claim.rejectionReason = _reason;
+        } else if (_status == ClaimStatus.Approved) {
+            // Automatically transfer USDFC to employee when approved
+            uint256 contractBalance = usdfc.balanceOf(address(this));
+            require(contractBalance >= claim.amount, "Insufficient USDFC balance in contract");
+
+            // Transfer USDFC to employee
+            bool success = usdfc.transfer(claim.employee, claim.amount);
+            require(success, "USDFC transfer failed");
+
+            // Update tracking
+            totalReimbursed += claim.amount;
+
+            emit ReimbursementPaid(_claimId, claim.employee, claim.amount);
         }
 
         emit ClaimProcessed(_claimId, _status, _reason);
@@ -173,5 +209,41 @@ contract ClearedContract {
             }
         }
         return (false, 0);
+    }
+
+    // Fund contract with USDFC (owner only)
+    function fundContract(uint256 _amount) public onlyOwner {
+        require(_amount > 0, "Amount must be greater than 0");
+
+        // Transfer USDFC from owner to contract
+        bool success = usdfc.transferFrom(msg.sender, address(this), _amount);
+        require(success, "USDFC transfer failed");
+
+        totalFunded += _amount;
+        emit PolicyFunded(msg.sender, _amount);
+    }
+
+    // Withdraw USDFC from contract (owner only)
+    function withdrawFunds(uint256 _amount) public onlyOwner {
+        require(_amount > 0, "Amount must be greater than 0");
+
+        uint256 contractBalance = usdfc.balanceOf(address(this));
+        require(contractBalance >= _amount, "Insufficient contract balance");
+
+        // Transfer USDFC from contract to owner
+        bool success = usdfc.transfer(msg.sender, _amount);
+        require(success, "USDFC transfer failed");
+
+        emit FundsWithdrawn(msg.sender, _amount);
+    }
+
+    // Get contract USDFC balance
+    function getContractBalance() public view returns (uint256) {
+        return usdfc.balanceOf(address(this));
+    }
+
+    // Get USDFC token address
+    function getUSDFCAddress() public view returns (address) {
+        return address(usdfc);
     }
 }

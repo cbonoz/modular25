@@ -28,7 +28,7 @@ export const ipfsUrl = (cid, fileName) => {
   return url;
 };
 
-export const uploadUrl = (uploadId) => `${window.location.origin}/upload/${uploadId}`;
+export const policyUrl = (uploadId) => `${window.location.origin}/upload/${uploadId}`;
 
 export const convertCamelToHuman = (str) => {
   // Check if likely datetime timestamp ms

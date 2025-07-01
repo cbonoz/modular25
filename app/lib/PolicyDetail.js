@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, Suspense, useMemo } from 'react';
+import { ethers } from 'ethers';
 import {
     Card,
     Breadcrumb,
@@ -24,6 +25,14 @@ import {
 import { ACTIVE_CHAIN, CHAIN_MAP, MAX_FILE_SIZE_BYTES } from '../constants';
 import RenderObject from './RenderObject';
 
+// Import modular components
+import EmployeeClaimForm from './EmployeeClaimForm';
+import PolicyInfoCard from './PolicyInfoCard';
+import OwnerFundingCard from './OwnerFundingCard';
+import ClaimsList from './ClaimsList';
+import ResultCard from './ResultCard';
+import { getStatusColor, getStatusText, RESULT_MESSAGES } from './PolicyConstants';
+
 import {
     submitClaim,
     getClaim,
@@ -32,6 +41,11 @@ import {
     getMetadata,
     validateReceipt,
     updatePolicyStatus,
+    getContractUSDFCBalance,
+    getUserUSDFCBalance,
+    fundContractWithUSDFC,
+    getFundingInfo,
+    withdrawFromContract,
 } from '../util/appContract';
 import { useAccount, useNetwork, useSwitchNetwork } from 'wagmi';
 import { useEthersSigner } from '../hooks/useEthersSigner';
@@ -57,6 +71,15 @@ const PolicyDetail = ({ uploadId }) => {
     const [employeeClaims, setEmployeeClaims] = useState([]);
     const [allClaims, setAllClaims] = useState([]);
     const [networkError, setNetworkError] = useState(false);
+
+    // USDFC-related state
+    const [contractUSDFCBalance, setContractUSDFCBalance] = useState('0');
+    const [userUSDFCBalance, setUserUSDFCBalance] = useState('0');
+    const [fundingAmount, setFundingAmount] = useState('');
+    const [withdrawAmount, setWithdrawAmount] = useState('');
+    const [fundingInfo, setFundingInfo] = useState({ totalFunded: '0', totalReimbursed: '0', remainingBalance: '0' });
+    const [usdcLoading, setUsdcLoading] = useState(false);
+
     console.log('policy contract', uploadId);
 
     const { address, isConnected } = useAccount();
@@ -72,7 +95,7 @@ const PolicyDetail = ({ uploadId }) => {
             console.log('Network changed to:', chain.name, chain.id);
             setError(undefined);
             setNetworkError(false);
-            
+
             if (!CHAIN_MAP[chain.id]) {
                 setNetworkError(true);
                 setError(`Unsupported network. Please switch to ${ACTIVE_CHAIN.name} and refresh`);
@@ -122,7 +145,7 @@ const PolicyDetail = ({ uploadId }) => {
 
             console.log('submitted claim', res);
             setResult({
-                type: 'claim_submitted',
+                type: RESULT_MESSAGES.CLAIM_SUBMITTED,
                 message: 'Reimbursement claim submitted successfully!',
                 amount: claimAmount,
                 description: claimDescription,
@@ -152,7 +175,7 @@ const PolicyDetail = ({ uploadId }) => {
             const res = await validateReceipt(signer, uploadId, receiptHash);
             console.log('validate receipt', res);
             setResult({
-                type: 'receipt_validation',
+                type: RESULT_MESSAGES.RECEIPT_VALIDATION,
                 exists: res.exists,
                 claimId: res.claimId,
                 receiptHash
@@ -201,7 +224,7 @@ const PolicyDetail = ({ uploadId }) => {
         try {
             await processClaim(signer, uploadId, claimId, status, reason);
             setResult({
-                type: 'claim_processed',
+                type: RESULT_MESSAGES.CLAIM_PROCESSED,
                 claimId,
                 status: status === 1 ? 'Approved' : 'Rejected',
                 reason
@@ -220,10 +243,76 @@ const PolicyDetail = ({ uploadId }) => {
         try {
             await updatePolicyStatus(signer, uploadId, isActive);
             setResult({
-                type: 'policy_status_updated',
+                type: RESULT_MESSAGES.POLICY_STATUS_UPDATED,
                 status: isActive ? 'Activated' : 'Deactivated'
             });
             await getData(); // Refresh policy data
+        } catch (e) {
+            setError(humanError(e));
+        } finally {
+            setRpcLoading(false);
+        }
+    }
+
+    // Load USDFC balances and funding info
+    async function loadUSDFCData() {
+        try {
+            setUsdcLoading(true);
+            
+            // Get contract USDFC balance
+            const contractBalance = await getContractUSDFCBalance(signer, uploadId);
+            setContractUSDFCBalance(contractBalance.toString());
+            
+            // Get user USDFC balance
+            if (address) {
+                const userBalance = await getUserUSDFCBalance(signer, address);
+                setUserUSDFCBalance(userBalance.toString());
+            }
+            
+            // Get funding info
+            const funding = await getFundingInfo(signer, uploadId);
+            setFundingInfo({
+                totalFunded: funding.totalFunded.toString(),
+                totalReimbursed: funding.totalReimbursed.toString(),
+                remainingBalance: funding.remainingBalance.toString()
+            });
+            
+        } catch (e) {
+            console.error('Error loading USDFC data', e);
+        } finally {
+            setUsdcLoading(false);
+        }
+    }
+
+    // Fund contract with USDFC (owner only)
+    async function handleFundContract() {
+        setRpcPending();
+        try {
+            await fundContractWithUSDFC(signer, uploadId, fundingAmount);
+            setResult({
+                type: RESULT_MESSAGES.CONTRACT_FUNDED,
+                amount: fundingAmount
+            });
+            setFundingAmount('');
+            await loadUSDFCData(); // Refresh balances
+        } catch (e) {
+            setError(humanError(e));
+        } finally {
+            setRpcLoading(false);
+        }
+    }
+
+    // Withdraw from contract (owner only)
+    async function handleWithdrawFromContract() {
+        setRpcPending();
+        try {
+            await withdrawFromContract(signer, uploadId, withdrawAmount);
+            setResult({
+                type: RESULT_MESSAGES.CONTRACT_WITHDRAWAL,
+                amount: withdrawAmount
+            });
+            setWithdrawAmount('');
+            await loadUSDFCData(); // Refresh balances
         } catch (e) {
             setError(humanError(e));
         } finally {
@@ -246,6 +335,10 @@ const PolicyDetail = ({ uploadId }) => {
             } else {
                 await loadEmployeeClaims();
             }
+            
+            // Load USDFC data after main policy data is loaded
+            await loadUSDFCData();
+            
         } catch (e) {
             console.error('error getting policy data', e);
             alert('Error getting policy data: ' + humanError(e));
@@ -281,110 +374,26 @@ const PolicyDetail = ({ uploadId }) => {
         );
     }
 
-    const getStatusColor = (status) => {
-        switch(status) {
-            case 0: return '#faad14'; // Pending - yellow
-            case 1: return '#52c41a'; // Approved - green
-            case 2: return '#ff4d4f'; // Rejected - red
-            default: return '#d9d9d9';
-        }
-    };
-
-    const getStatusText = (status) => {
-        switch(status) {
-            case 0: return 'Pending';
-            case 1: return 'Approved';
-            case 2: return 'Rejected';
-            default: return 'Unknown';
-        }
-    };
-
     // Employee tab - Submit reimbursement claim
     const employeeTab = {
         key: '1',
         label: 'Submit Reimbursement Claim',
         children: (
-            <div>
-                <h4>Submit Reimbursement Request</h4>
-
-                {!data?.policyParams?.isActive && (
-                    <div style={{
-                        background: '#fff2f0',
-                        border: '1px solid #ffccc7',
-                        borderRadius: '4px',
-                        padding: '12px',
-                        marginBottom: '16px'
-                    }}>
-                        <p style={{ color: '#ff4d4f', fontWeight: 'bold', margin: 0 }}>
-                            ⚠️ Policy Inactive
-                        </p>
-                        <p style={{ margin: '4px 0 0 0', fontSize: '14px' }}>
-                            This reimbursement policy is currently inactive. New claims cannot be submitted at this time.
-                        </p>
-                    </div>
-                )}
-
-                <p>Upload your receipt and provide claim details below:</p>
-                <br />
-
-                <h5>Amount (USD)</h5>
-                <Input
-                    type="number"
-                    placeholder="Enter amount"
-                    value={claimAmount}
-                    onChange={(e) => setClaimAmount(e.target.value)}
-                    max={data?.policyParams?.maxAmount}
-                    disabled={!data?.policyParams?.isActive}
-                />
-                <p style={{ fontSize: '12px', color: '#666' }}>
-                    Maximum allowed: ${data?.policyParams?.maxAmount}
-                </p>
-                <br />
-
-                <h5>Description</h5>
-                <TextArea
-                    rows={3}
-                    placeholder="Describe your expense (e.g., Monthly internet bill for remote work)"
-                    value={claimDescription}
-                    onChange={(e) => setClaimDescription(e.target.value)}
-                    disabled={!data?.policyParams?.isActive}
-                />
-                <br />
-                <br />
-
-                <h5>Receipt Upload</h5>
-                <p className="bold">
-                    Also upload to IPFS?&nbsp;
-                    <Checkbox
-                        type="checkbox"
-                        checked={shouldUpload}
-                        onChange={(e) => setShouldUpload(e.target.checked)}
-                        disabled={!data?.policyParams?.isActive}
-                    />
-                    &nbsp;
-                    <Tooltip
-                        className="pointer"
-                        title="If checked, receipt will be stored on IPFS for verification"
-                    >
-                        <InfoCircleOutlined />
-                    </Tooltip>
-                </p>
-                <FileDrop
-                    files={files}
-                    setFiles={(files) => setFiles(files)}
-                    disabled={!data?.policyParams?.isActive}
-                />
-                <br />
-
-                <Button
-                    type="primary"
-                    onClick={submitReimbursementClaim}
-                    loading={rpcLoading}
-                    disabled={rpcLoading || !claimAmount || !claimDescription || isEmpty(files) || !data?.policyParams?.isActive}
-                >
-                    {data?.policyParams?.isActive ? 'Submit Claim' : 'Policy Inactive'}
-                </Button>
-            </div>
+            <EmployeeClaimForm
+                data={data}
+                claimAmount={claimAmount}
+                setClaimAmount={setClaimAmount}
+                claimDescription={claimDescription}
+                setClaimDescription={setClaimDescription}
+                files={files}
+                setFiles={setFiles}
+                shouldUpload={shouldUpload}
+                setShouldUpload={setShouldUpload}
+                contractUSDFCBalance={contractUSDFCBalance}
+                usdcLoading={usdcLoading}
+                rpcLoading={rpcLoading}
+                onSubmitClaim={submitReimbursementClaim}
+            />
         ),
     };
 
@@ -417,33 +426,12 @@ const PolicyDetail = ({ uploadId }) => {
         key: '3',
         label: `My Claims (${employeeClaims.length})`,
         children: (
-            <div>
-                <h4>Your Submitted Claims</h4>
-                {employeeClaims.length === 0 ? (
-                    <p>No claims submitted yet.</p>
-                ) : (
-                    employeeClaims.map((claim) => (
-                        <Card
-                            key={claim.id}
-                            size="small"
-                            style={{ marginBottom: '10px' }}
-                            title={`Claim #${claim.id}`}
-                        >
-                            <p><strong>Amount:</strong> ${claim.amount}</p>
-                            <p><strong>Description:</strong> {claim.description}</p>
-                            <p><strong>Status:</strong>
-                                <span style={{ color: getStatusColor(claim.status), fontWeight: 'bold' }}>
-                                    {' ' + getStatusText(claim.status)}
-                                </span>
-                            </p>
-                            <p><strong>Submitted:</strong> {claim.timestamp}</p>
-                            {claim.rejectionReason && (
-                                <p><strong>Rejection Reason:</strong> {claim.rejectionReason}</p>
-                            )}
-                        </Card>
-                    ))
-                )}
-            </div>
+            <ClaimsList
+                claims={employeeClaims}
+                isOwner={false}
+                onProcessClaim={null} // Employees can't process claims
+                rpcLoading={rpcLoading}
+            />
         ),
     };
 
@@ -452,55 +440,12 @@ const PolicyDetail = ({ uploadId }) => {
         key: '4',
         label: `Manage Claims (${allClaims.length})`,
         children: (
-            <div>
-                <h4>Policy Claims Management</h4>
-                {allClaims.length === 0 ? (
-                    <p>No claims submitted yet.</p>
-                ) : (
-                    allClaims.map((claim) => (
-                        <Card
-                            key={claim.id}
-                            size="small"
-                            style={{ marginBottom: '10px' }}
-                            title={`Claim #${claim.id} - ${getStatusText(claim.status)}`}
-                        >
-                            <p><strong>Employee:</strong> {claim.employee}</p>
-                            <p><strong>Amount:</strong> ${claim.amount}</p>
-                            <p><strong>Description:</strong> {claim.description}</p>
-                            <p><strong>Submitted:</strong> {claim.timestamp}</p>
-
-                            {claim.status === 0 && ( // Pending claims
-                                <div style={{ marginTop: '10px' }}>
-                                    <Button
-                                        type="primary"
-                                        size="small"
-                                        onClick={() => handleProcessClaim(claim.id, 1, '')}
-                                        style={{ marginRight: '8px' }}
-                                    >
-                                        Approve
-                                    </Button>
-                                    <Button
-                                        type="default"
-                                        size="small"
-                                        onClick={() => {
-                                            const reason = prompt('Reason for rejection:');
-                                            if (reason !== null) {
-                                                handleProcessClaim(claim.id, 2, reason);
-                                            }
-                                        }}
-                                    >
-                                        Reject
-                                    </Button>
-                                </div>
-                            )}
-
-                            {claim.rejectionReason && (
-                                <p><strong>Rejection Reason:</strong> {claim.rejectionReason}</p>
-                            )}
-                        </Card>
-                    ))
-                )}
-            </div>
+            <ClaimsList
+                claims={allClaims}
+                isOwner={true}
+                onProcessClaim={handleProcessClaim}
+                rpcLoading={rpcLoading}
+            />
         ),
     };
 
@@ -531,61 +476,55 @@ const PolicyDetail = ({ uploadId }) => {
                     </span>
                 }
             >
-                {loading && <p>Loading policy information...</p>}
-
-                <Row
-                    gutter={{
-                        xs: 8,
-                        sm: 16,
-                        md: 24,
-                        lg: 32,
-                    }}
-                >
+                {loading ? (
+                    <div style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        minHeight: '400px',
+                        textAlign: 'center'
+                    }}>
+                        <Spin size="large" />
+                        <h3 style={{ margin: '20px 0', color: '#666' }}>Loading Policy Information...</h3>
+                        <p style={{ color: '#999', fontSize: '14px' }}>
+                            Fetching contract data and USDFC balances
+                        </p>
+                    </div>
+                ) : (
+                    <>
+                        <Row
+                            gutter={{
+                                xs: 8,
+                                sm: 16,
+                                md: 24,
+                                lg: 32,
+                            }}
+                        >
                     <Col span={12}>
                         <div>
-                            <h4>Policy Information</h4>
-                            <Card size="small">
-                                <p><strong>Policy Name:</strong> {data?.name}</p>
-                                <p><strong>Description:</strong> {data?.description}</p>
-                                <p><strong>Business Type:</strong> {data?.policyParams?.businessType}</p>
-                                <p><strong>Location:</strong> {data?.policyParams?.location}</p>
-                                <p><strong>Employee Count:</strong> {data?.policyParams?.employeeCount}</p>
-                                <p><strong>Max Amount:</strong> ${data?.policyParams?.maxAmount}</p>
-                                <p><strong>Category:</strong> {data?.policyParams?.category}</p>
-                                <p><strong>Status:</strong>
-                                    <span style={{
-                                        color: data?.policyParams?.isActive ? 'green' : 'red',
-                                        fontWeight: 'bold'
-                                    }}>
-                                        {data?.policyParams?.isActive ? ' Active' : ' Inactive'}
-                                    </span>
-                                    {isOwner && (
-                                        <Button
-                                            size="small"
-                                            type={data?.policyParams?.isActive ? 'default' : 'primary'}
-                                            style={{ marginLeft: '10px' }}
-                                            onClick={() => {
-                                                const action = data?.policyParams?.isActive ? 'deactivate' : 'activate';
-                                                const confirmed = window.confirm(
-                                                    `Are you sure you want to ${action} this policy? ${
-                                                        data?.policyParams?.isActive
-                                                            ? 'This will prevent new claims from being submitted.'
-                                                            : 'This will allow employees to submit claims again.'
-                                                    }`
-                                                );
-                                                if (confirmed) {
-                                                    handleUpdatePolicyStatus(!data?.policyParams?.isActive);
-                                                }
-                                            }}
-                                        >
-                                            {data?.policyParams?.isActive ? 'Deactivate' : 'Activate'}
-                                        </Button>
-                                    )}
-                                </p>
-                                <p><strong>Total Claims:</strong> {data?.claimCount}</p>
-                                <p><strong>Created:</strong> {data?.createdAt}</p>
-                                <p><strong>Owner:</strong> {data?.owner}</p>
-                            </Card>
+                            <PolicyInfoCard
+                                data={data}
+                                isOwner={isOwner}
+                                onUpdatePolicyStatus={handleUpdatePolicyStatus}
+                            />
+                            
+                            {/* USDFC Funding Section - Owner Only */}
+                            {isOwner && (
+                                <OwnerFundingCard
+                                    contractUSDFCBalance={contractUSDFCBalance}
+                                    userUSDFCBalance={userUSDFCBalance}
+                                    fundingInfo={fundingInfo}
+                                    fundingAmount={fundingAmount}
+                                    setFundingAmount={setFundingAmount}
+                                    withdrawAmount={withdrawAmount}
+                                    setWithdrawAmount={setWithdrawAmount}
+                                    onFundContract={handleFundContract}
+                                    onWithdrawFromContract={handleWithdrawFromContract}
+                                    usdcLoading={usdcLoading}
+                                    rpcLoading={rpcLoading}
+                                />
+                            )}
                         </div>
                         <br />
                         <p>
@@ -622,58 +561,7 @@ const PolicyDetail = ({ uploadId }) => {
                         )}
                         <br />
                         {result && (
-                            <div>
-                                <Card title="Result" size="small">
-                                    {result.type === 'claim_submitted' && (
-                                        <div>
-                                            <p style={{ color: 'green', fontWeight: 'bold' }}>
-                                                ✅ {result.message}
-                                            </p>
-                                            <p>Amount: ${result.amount}</p>
-                                            <p>Description: {result.description}</p>
-                                        </div>
-                                    )}
-                                    {result.type === 'receipt_validation' && (
-                                        <div>
-                                            <p>Receipt Hash: {result.receiptHash}</p>
-                                            <p style={{
-                                                color: result.exists ? 'green' : 'orange',
-                                                fontWeight: 'bold'
-                                            }}>
-                                                {result.exists ? '✅ Receipt found in system' : '⚠️ Receipt not found'}
-                                            </p>
-                                            {result.exists && <p>Associated with Claim #{result.claimId}</p>}
-                                        </div>
-                                    )}
-                                    {result.type === 'claim_processed' && (
-                                        <div>
-                                            <p style={{ color: 'green', fontWeight: 'bold' }}>
-                                                ✅ Claim #{result.claimId} {result.status}
-                                            </p>
-                                            {result.reason && <p>Reason: {result.reason}</p>}
-                                        </div>
-                                    )}
-                                    {result.type === 'policy_status_updated' && (
-                                        <div>
-                                            <p style={{ color: 'green', fontWeight: 'bold' }}>
-                                                ✅ Policy {result.status} Successfully
-                                            </p>
-                                            <p>
-                                                {result.status === 'Activated'
-                                                    ? 'Employees can now submit new claims.'
-                                                    : 'New claim submissions are now disabled.'}
-                                            </p>
-                                        </div>
-                                    )}
-                                    {result.type === 'policy_status_updated' && (
-                                        <div>
-                                            <p style={{ color: 'green', fontWeight: 'bold' }}>
-                                                ✅ Policy {result.status}
-                                            </p>
-                                        </div>
-                                    )}
-                                </Card>
-                            </div>
+                            <ResultCard result={result} />
                         )}
 
                         {error && (
@@ -682,10 +570,10 @@ const PolicyDetail = ({ uploadId }) => {
                                     Error: {error}
                                 </div>
                                 {networkError && isConnected && chain && !CHAIN_MAP[chain.id] && (
-                                    <div style={{ 
-                                        padding: '15px', 
-                                        border: '1px solid #ff4d4f', 
-                                        borderRadius: '6px', 
+                                    <div style={{
+                                        padding: '15px',
+                                        border: '1px solid #ff4d4f',
+                                        borderRadius: '6px',
                                         backgroundColor: '#fff2f0',
                                         textAlign: 'center'
                                     }}>
@@ -696,8 +584,8 @@ const PolicyDetail = ({ uploadId }) => {
                                             You're connected to <strong>{chain.name}</strong>.<br />
                                             This app requires <strong>{ACTIVE_CHAIN.name}</strong>.
                                         </div>
-                                        <Button 
-                                            type="primary" 
+                                        <Button
+                                            type="primary"
                                             danger
                                             size="large"
                                             loading={isSwitching}
@@ -724,6 +612,8 @@ const PolicyDetail = ({ uploadId }) => {
                         )}
                     </Col>
                 </Row>
+                    </>
+                )}
             </Card>
         </div>
     );

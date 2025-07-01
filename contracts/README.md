@@ -8,4 +8,6 @@ This contract project uses forge foundry for builds https://book.getfoundry.sh/r
 Compiling contracts:
 `yarn build`
 
-Copy contents of `.json` contract to `metadata.js` in the app project.
+Applying the contract changes
+`yarn apply` # compiles and copies the ABI contents to the active project.
+
