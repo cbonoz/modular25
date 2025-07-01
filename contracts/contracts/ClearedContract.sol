@@ -47,7 +47,7 @@ contract ClearedContract {
     event ClaimProcessed(uint256 claimId, ClaimStatus status, string reason);
 
     constructor(
-        string memory _policyName, 
+        string memory _policyName,
         string memory _policyDescription,
         string memory _businessType,
         string memory _location,
@@ -58,7 +58,7 @@ contract ClearedContract {
         owner = msg.sender;
         policyName = _policyName;
         policyDescription = _policyDescription;
-        
+
         policyParams = PolicyParams({
             businessType: _businessType,
             location: _location,
@@ -93,7 +93,7 @@ contract ClearedContract {
         require(_receiptHash != bytes32(0), "Receipt hash required");
 
         claimCount++;
-        
+
         ReimbursementClaim memory newClaim = ReimbursementClaim({
             employee: msg.sender,
             receiptHash: _receiptHash,
@@ -114,13 +114,13 @@ contract ClearedContract {
 
     // Process a claim (approve/reject) - only owner
     function processClaim(
-        uint256 _claimId, 
-        ClaimStatus _status, 
+        uint256 _claimId,
+        ClaimStatus _status,
         string memory _reason
     ) public onlyOwner {
         require(_claimId > 0 && _claimId <= claimCount, "Invalid claim ID");
         require(_status != ClaimStatus.Pending, "Must approve or reject");
-        
+
         ReimbursementClaim storage claim = claims[_claimId];
         require(claim.status == ClaimStatus.Pending, "Claim already processed");
 
@@ -145,11 +145,11 @@ contract ClearedContract {
 
     // Get policy metadata
     function getPolicyMetadata() public view returns (
-        string memory, 
-        string memory, 
-        PolicyParams memory, 
-        uint256, 
-        uint256, 
+        string memory,
+        string memory,
+        PolicyParams memory,
+        uint256,
+        uint256,
         address
     ) {
         return (policyName, policyDescription, policyParams, claimCount, createdAt, owner);

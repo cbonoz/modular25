@@ -12,41 +12,71 @@ export async function deployContract(
     maxAmount,
     category
 ) {
-    // Deploy contract with ethers
-    const factory = new ethers.ContractFactory(
-        CLEARED_CONTRACT.abi,
-        CLEARED_CONTRACT.bytecode,
-        signer
-    );
+    try {
+        // Check if signer is available and connected
+        if (!signer) {
+            throw new Error('No signer available. Please connect your wallet.');
+        }
 
-    const options = {
-        // gasLimit: 3000000,
-        // gasPrice: 10000000000,
-    };
-    const contract = await factory.deploy(
-        policyName,
-        policyDescription,
-        businessType,
-        location,
-        employeeCount,
-        ethers.utils.parseUnits(maxAmount.toString(), 0), // Convert to wei-like units
-        category
-    );
-    
-    console.log(
-        'Deploying reimbursement policy contract...',
-        policyName,
-        policyDescription,
-        businessType,
-        location,
-        employeeCount,
-        maxAmount,
-        category
-    );
+        // Get the current network from the signer
+        const network = await signer.provider.getNetwork();
+        console.log('Deploying to network:', network.name, network.chainId);
 
-    await contract.deployed();
-    console.log('deployed contract...', contract.address);
-    return contract;
+        // Deploy contract with ethers
+        const factory = new ethers.ContractFactory(
+            CLEARED_CONTRACT.abi,
+            CLEARED_CONTRACT.bytecode,
+            signer
+        );
+
+        const options = {
+            // gasLimit: 3000000,
+            // gasPrice: 10000000000,
+        };
+        
+        console.log(
+            'Deploying reimbursement policy contract...',
+            policyName,
+            policyDescription,
+            businessType,
+            location,
+            employeeCount,
+            maxAmount,
+            category
+        );
+
+        const contract = await factory.deploy(
+            policyName,
+            policyDescription,
+            businessType,
+            location,
+            employeeCount,
+            parseInt(maxAmount), // Convert to integer instead of using parseUnits
+            category
+        );
+
+        await contract.deployed();
+        console.log('deployed contract...', contract.address);
+        return contract;
+    } catch (error) {
+        console.error('Contract deployment error:', error);
+        
+        // Check for common network-related errors
+        if (error.message.includes('network changed') || error.message.includes('Network')) {
+            throw new Error('Network changed during deployment. Please refresh the page and try again.');
+        }
+        
+        if (error.message.includes('user rejected')) {
+            throw new Error('Transaction was rejected by user.');
+        }
+        
+        if (error.message.includes('insufficient funds')) {
+            throw new Error('Insufficient funds for gas fees.');
+        }
+        
+        // Re-throw the original error if it's not a known network issue
+        throw error;
+    }
 }
 
 export const getMetadata = async (signer, address) => {
@@ -74,8 +104,8 @@ export const getMetadata = async (signer, address) => {
 export const submitClaim = async (signer, address, amount, description, receiptHash, receiptCid) => {
     const contract = new ethers.Contract(address, CLEARED_CONTRACT.abi, signer);
     console.log('submitting claim', amount, description, receiptHash, receiptCid);
-    const amountInWei = ethers.utils.parseUnits(amount.toString(), 0);
-    const result = await contract.submitClaim(amountInWei, description, receiptHash, receiptCid);
+    const amountAsInteger = parseInt(amount);
+    const result = await contract.submitClaim(amountAsInteger, description, receiptHash, receiptCid);
     console.log('submit claim result', result);
     await result.wait(); // Wait for transaction confirmation
     return result;
@@ -129,4 +159,14 @@ export const validateReceipt = async (signer, address, receiptHash) => {
         exists: result.exists,
         claimId: result.claimId.toNumber()
     };
+};
+
+// Update policy status (activate/deactivate) - owner only
+export const updatePolicyStatus = async (signer, address, isActive) => {
+    const contract = new ethers.Contract(address, CLEARED_CONTRACT.abi, signer);
+    console.log('updating policy status', isActive);
+    const result = await contract.updatePolicyStatus(isActive);
+    console.log('update policy status result', result);
+    await result.wait();
+    return result;
 };

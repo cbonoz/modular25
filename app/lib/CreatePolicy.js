@@ -35,29 +35,40 @@ import {
 } from '../constants';
 import { FileDrop } from './FileDrop';
 import { deployContract } from '../util/appContract';
-import { useAccount, useNetwork } from 'wagmi';
+import { useAccount, useNetwork, useSwitchNetwork } from 'wagmi';
 import ConnectButton from './ConnectButton';
 import { useEthersSigner } from '../hooks/useEthersSigner';
 import { InfoCircleOutlined } from '@ant-design/icons';
 
-function CreateListing() {
-    const { address } = useAccount();
+function CreatePolicy() {
+    const { address, isConnected } = useAccount();
     const { chain } = useNetwork();
+    const { switchNetwork, isLoading: isSwitching } = useSwitchNetwork();
 
     const signer = useEthersSigner({ chainId: chain?.id });
     const activeChain = CHAIN_MAP[chain?.id] || ACTIVE_CHAIN;
-    //   useEffect(() => {
-    //     const networkId = network?.chain?.id
-    //     console.log('network', network)
-    //     if (networkId) {
-    //       refetch()
-    //     }
-    //   }, [network, account])
 
     const [data, setData] = useState({});
     const [error, setError] = useState();
     const [loading, setLoading] = useState(false);
     const [result, setResult] = useState();
+    const [networkError, setNetworkError] = useState(false);
+
+    // Handle network changes
+    useEffect(() => {
+        if (isConnected && chain) {
+            console.log('Network changed to:', chain.name, chain.id);
+            // Clear any existing errors when network changes
+            setError(undefined);
+            setNetworkError(false);
+            
+            // Check if we're on the supported network
+            if (!CHAIN_MAP[chain.id]) {
+                setNetworkError(true);
+                setError(`Unsupported network. Please switch to ${ACTIVE_CHAIN.name}`);
+            }
+        }
+    }, [chain?.id, isConnected]);
 
     const setDemo = () => setData({
         name: 'Remote Work Internet Reimbursement Policy',
@@ -75,6 +86,12 @@ function CreateListing() {
     };
 
     const getActiveError = (data) => {
+        if (networkError) {
+            return `Please switch to ${ACTIVE_CHAIN.name} network in your wallet`;
+        }
+        if (!isConnected || !address) {
+            return 'Please connect your wallet';
+        }
         if (!data.name || !data.description) {
             return 'Please provide a policy name and description.';
         }
@@ -95,9 +112,17 @@ function CreateListing() {
 
     const create = async () => {
         setError(undefined);
+        setNetworkError(false);
 
         if (errMessage) {
             setError(errMessage);
+            return;
+        }
+
+        // Double-check network before deployment
+        if (!isConnected || !chain || !CHAIN_MAP[chain.id]) {
+            setNetworkError(true);
+            setError(`Please connect to ${ACTIVE_CHAIN.name} network and refresh the page`);
             return;
         }
 
@@ -200,12 +225,30 @@ function CreateListing() {
                 <Col span={24}>
                     <div className="centered">
                         <Image
+                            className='pb-2 mb-2'
                             src="logo.png"
                             alt="Cleared Logo"
                             width={180}
                             height={37}
                         />
-                        <h3>Create Reimbursement Policy</h3>
+                        <h3 style={{ margin: '30px 0 40px 0', fontSize: '28px' }}>Create Reimbursement Policy</h3>
+                        
+                        {isConnected && chain && (
+                            <div style={{ 
+                                padding: '8px 12px', 
+                                borderRadius: '4px', 
+                                backgroundColor: CHAIN_MAP[chain.id] ? '#f6ffed' : '#fff2f0',
+                                border: `1px solid ${CHAIN_MAP[chain.id] ? '#b7eb8f' : '#ffb3b3'}`,
+                                fontSize: '12px',
+                                marginBottom: '10px'
+                            }}>
+                                Connected to: <strong>{chain.name}</strong>
+                                {!CHAIN_MAP[chain.id] && (
+                                    <span style={{ color: '#ff4d4f' }}> (Unsupported)</span>
+                                )}
+                            </div>
+                        )}
+                        
                         <br />
                         <br />
                     </div>
@@ -387,14 +430,27 @@ function CreateListing() {
 
                                     {!address && (
                                         <ConnectButton text="Connect wallet to continue" />
-                                    )}
+                                    )}                                {!error && !result && loading && (
+                                    <span className="italic">
+                                        &nbsp;Deploying reimbursement policy contract.
+                                        Confirmation may take a few moments.
+                                    </span>
+                                )}
 
-                                    {!error && !result && loading && (
-                                        <span className="italic">
-                                            &nbsp;Deploying reimbursement policy contract.
-                                            Confirmation may take a few moments.
-                                        </span>
-                                    )}
+                                {networkError && (
+                                    <div style={{ marginTop: '10px' }}>
+                                        <Button 
+                                            type="default" 
+                                            onClick={() => window.location.reload()}
+                                            size="small"
+                                        >
+                                            Refresh Page
+                                        </Button>
+                                        <p style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
+                                            Network changed. Please refresh to continue.
+                                        </p>
+                                    </div>
+                                )}
                                 </div>
 
                                 <br />
@@ -402,7 +458,50 @@ function CreateListing() {
                             </>
                         )}
                         {error && (
-                            <div className="error-text">Error: {error}</div>
+                            <div className="error-text">
+                                <div style={{ marginBottom: '15px' }}>
+                                    Error: {error}
+                                </div>
+                                {networkError && isConnected && chain && !CHAIN_MAP[chain.id] && (
+                                    <div style={{ 
+                                        padding: '15px', 
+                                        border: '1px solid #ff4d4f', 
+                                        borderRadius: '6px', 
+                                        backgroundColor: '#fff2f0',
+                                        textAlign: 'center'
+                                    }}>
+                                        <div style={{ marginBottom: '10px', color: '#ff4d4f' }}>
+                                            <strong>Wrong Network Detected</strong>
+                                        </div>
+                                        <div style={{ marginBottom: '15px', fontSize: '14px' }}>
+                                            You're connected to <strong>{chain.name}</strong>.<br />
+                                            This app requires <strong>{ACTIVE_CHAIN.name}</strong>.
+                                        </div>
+                                        <Button 
+                                            type="primary" 
+                                            danger
+                                            size="large"
+                                            loading={isSwitching}
+                                            onClick={async () => {
+                                                try {
+                                                    console.log('Switching to network:', ACTIVE_CHAIN.id, ACTIVE_CHAIN);
+                                                    await switchNetwork?.(ACTIVE_CHAIN.id);
+                                                } catch (error) {
+                                                    console.error('Network switch failed:', error);
+                                                    // Fallback: show manual instructions
+                                                    alert(`Failed to switch networks automatically. Please manually switch to ${ACTIVE_CHAIN.name} in your wallet.`);
+                                                }
+                                            }}
+                                            style={{ minWidth: '200px' }}
+                                        >
+                                            {isSwitching ? 'Switching...' : `Switch to ${ACTIVE_CHAIN.name}`}
+                                        </Button>
+                                        <div style={{ marginTop: '10px', fontSize: '12px', color: '#666' }}>
+                                            If the button doesn't work, please switch networks manually in your wallet.
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
                         )}
                         {result && (
                             <div>
@@ -493,4 +592,4 @@ function CreateListing() {
     );
 }
 
-export default CreateListing;
+export default CreatePolicy;

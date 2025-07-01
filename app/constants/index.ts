@@ -3,6 +3,7 @@ import {
 } from '@wagmi/core/chains';
 
 export const siteConfig = {
+    title: 'Cleared | Self-governing Reimbursements',
     name: 'Cleared',
     description: 'Self-governing reimbursements cleared on-chain with AI and human review.',
     cta: {

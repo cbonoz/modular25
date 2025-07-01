@@ -21,5 +21,4 @@ const WagmiWrapper = ({ children }) => {
     )
 }
 
-
 export default WagmiWrapper

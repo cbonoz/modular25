@@ -1,5 +1,5 @@
 import { Button } from 'antd'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useAccount, useConnect, useDisconnect, useNetwork, useSwitchNetwork } from 'wagmi'
 import { InjectedConnector } from 'wagmi/connectors/injected'
 import { CHAIN_MAP, ACTIVE_CHAIN } from '../constants'
@@ -14,8 +14,10 @@ function ConnectButton({size='large', buttonType = 'primary', text = 'Connect Wa
   const { disconnect } = useDisconnect()
   const { chains, error, isLoading, pendingChainId, switchNetwork } =
   useSwitchNetwork()
+  const [showNetworkWarning, setShowNetworkWarning] = useState(false)
 
   const network = useNetwork()
+  
   useEffect(() => {
     if (connectOnMount) {
       connect()
@@ -23,23 +25,50 @@ function ConnectButton({size='large', buttonType = 'primary', text = 'Connect Wa
   }, [])
 
   useEffect(() => {
-    // console.log('check switch', network.chain, pendingChainId, ACTIVE_CHAIN.id, isConnected);
     const currentChainId = network?.chain?.id
-    if (currentChainId && currentChainId !== ACTIVE_CHAIN.id) {
-      console.log('switching network', CHAIN_MAP[currentChainId], CHAIN_MAP[ACTIVE_CHAIN.id])
-      switchNetwork?.(ACTIVE_CHAIN.id)
+    if (isConnected && currentChainId && currentChainId !== ACTIVE_CHAIN.id) {
+      console.log('Wrong network detected:', CHAIN_MAP[currentChainId], 'Expected:', CHAIN_MAP[ACTIVE_CHAIN.id])
+      setShowNetworkWarning(true)
+    } else {
+      setShowNetworkWarning(false)
     }
   }, [network, isConnected])
 
-  if (isConnected)
+  const handleSwitchNetwork = () => {
+    try {
+      switchNetwork?.(ACTIVE_CHAIN.id)
+    } catch (error) {
+      console.error('Failed to switch network:', error)
+    }
+  }
+
+  if (isConnected) {
     return (
       <div>
         Connected to:&nbsp;
         <a href={getExplorerUrl(network?.chain?.id, address)} target="_blank">{abbreviate(address)}</a>
-        {/* {address} */}
         <Button type="link" size={size} onClick={() => disconnect()}>Disconnect</Button>
+        
+        {showNetworkWarning && (
+          <div style={{ marginTop: '10px' }}>
+            <div style={{ color: '#ff4d4f', fontSize: '12px' }}>
+              Wrong network: {network?.chain?.name}
+            </div>
+            <Button 
+              type="dashed" 
+              size="small" 
+              onClick={handleSwitchNetwork}
+              loading={isLoading}
+              style={{ marginTop: '5px' }}
+            >
+              Switch to {ACTIVE_CHAIN.name}
+            </Button>
+          </div>
+        )}
       </div>
     )
+  }
+  
   return <Button type={buttonType} size={size} onClick={() => connect()}>{text}</Button>
 }
 

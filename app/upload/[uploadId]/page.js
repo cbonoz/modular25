@@ -1,7 +1,7 @@
 'use client'
 
 import { Breadcrumb, Spin } from "antd"
-import ListingDetail from "../../lib/ListingDetail"
+import PolicyDetail from "../../lib/PolicyDetail"
 import React, { useState, useEffect } from "react"
 
 
@@ -10,7 +10,7 @@ export default function UploadPage({ params }) {
 
     return (
         <div>
-            <ListingDetail uploadId={uploadId} />
+            <PolicyDetail uploadId={uploadId} />
         </div>
     )
 }

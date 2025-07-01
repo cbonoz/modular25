@@ -4,7 +4,8 @@
   "description": "Forge",
   "license": "MIT",
   "scripts": {
-    "build": "forge build"
+    "build": "forge build",
+    "apply": "forge build && node update-metadata.js"
   },
   "dependencies": {
     "@openzeppelin/contracts": "^4.9.3",

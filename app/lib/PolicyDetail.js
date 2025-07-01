@@ -22,7 +22,7 @@ import {
     isEmpty,
 } from '../util';
 import { ACTIVE_CHAIN, CHAIN_MAP, MAX_FILE_SIZE_BYTES } from '../constants';
-import RenderObject from '../lib/RenderObject';
+import RenderObject from './RenderObject';
 
 import {
     submitClaim,
@@ -33,7 +33,7 @@ import {
     validateReceipt,
     updatePolicyStatus,
 } from '../util/appContract';
-import { useAccount, useNetwork } from 'wagmi';
+import { useAccount, useNetwork, useSwitchNetwork } from 'wagmi';
 import { useEthersSigner } from '../hooks/useEthersSigner';
 import ConnectButton from './ConnectButton';
 import { FileDrop } from './FileDrop';
@@ -41,7 +41,7 @@ import TextArea from 'antd/es/input/TextArea';
 import { InfoCircleOutlined } from '@ant-design/icons';
 import { uploadFiles } from '../util/stor';
 
-const ListingDetail = ({ uploadId }) => {
+const PolicyDetail = ({ uploadId }) => {
     const [loading, setLoading] = useState(false);
     const [rpcLoading, setRpcLoading] = useState(false);
     const [result, setResult] = useState();
@@ -56,13 +56,29 @@ const ListingDetail = ({ uploadId }) => {
     const [claimDescription, setClaimDescription] = useState('');
     const [employeeClaims, setEmployeeClaims] = useState([]);
     const [allClaims, setAllClaims] = useState([]);
+    const [networkError, setNetworkError] = useState(false);
     console.log('policy contract', uploadId);
 
-    const { address } = useAccount();
+    const { address, isConnected } = useAccount();
     const { chain } = useNetwork();
+    const { switchNetwork, isLoading: isSwitching } = useSwitchNetwork();
     const signer = useEthersSigner({ chainId: chain?.id || ACTIVE_CHAIN.id });
 
     const isOwner = data?.owner === address;
+
+    // Handle network changes
+    useEffect(() => {
+        if (isConnected && chain) {
+            console.log('Network changed to:', chain.name, chain.id);
+            setError(undefined);
+            setNetworkError(false);
+            
+            if (!CHAIN_MAP[chain.id]) {
+                setNetworkError(true);
+                setError(`Unsupported network. Please switch to ${ACTIVE_CHAIN.name} and refresh`);
+            }
+        }
+    }, [chain?.id, isConnected]);
 
     const breadcrumbs = [
         {
@@ -660,7 +676,52 @@ const ListingDetail = ({ uploadId }) => {
                             </div>
                         )}
 
-                        {error && <p className="error-text">Error: {error}</p>}
+                        {error && (
+                            <div className="error-text">
+                                <div style={{ marginBottom: '15px' }}>
+                                    Error: {error}
+                                </div>
+                                {networkError && isConnected && chain && !CHAIN_MAP[chain.id] && (
+                                    <div style={{ 
+                                        padding: '15px', 
+                                        border: '1px solid #ff4d4f', 
+                                        borderRadius: '6px', 
+                                        backgroundColor: '#fff2f0',
+                                        textAlign: 'center'
+                                    }}>
+                                        <div style={{ marginBottom: '10px', color: '#ff4d4f' }}>
+                                            <strong>Wrong Network Detected</strong>
+                                        </div>
+                                        <div style={{ marginBottom: '15px', fontSize: '14px' }}>
+                                            You're connected to <strong>{chain.name}</strong>.<br />
+                                            This app requires <strong>{ACTIVE_CHAIN.name}</strong>.
+                                        </div>
+                                        <Button 
+                                            type="primary" 
+                                            danger
+                                            size="large"
+                                            loading={isSwitching}
+                                            onClick={async () => {
+                                                try {
+                                                    console.log('Switching to network:', ACTIVE_CHAIN.id, ACTIVE_CHAIN);
+                                                    await switchNetwork?.(ACTIVE_CHAIN.id);
+                                                } catch (error) {
+                                                    console.error('Network switch failed:', error);
+                                                    // Fallback: show manual instructions
+                                                    alert(`Failed to switch networks automatically. Please manually switch to ${ACTIVE_CHAIN.name} in your wallet.`);
+                                                }
+                                            }}
+                                            style={{ minWidth: '200px' }}
+                                        >
+                                            {isSwitching ? 'Switching...' : `Switch to ${ACTIVE_CHAIN.name}`}
+                                        </Button>
+                                        <div style={{ marginTop: '10px', fontSize: '12px', color: '#666' }}>
+                                            If the button doesn't work, please switch networks manually in your wallet.
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </Col>
                 </Row>
             </Card>
@@ -668,4 +729,4 @@ const ListingDetail = ({ uploadId }) => {
     );
 };
 
-export default ListingDetail;
+export default PolicyDetail;

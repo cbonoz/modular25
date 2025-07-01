@@ -31,7 +31,12 @@ function UiLayoutWrapper({ children }) {
             <ConfigProvider
                 theme={{
                     token: {
-                        colorPrimary: '#6B2E7A',
+                        colorPrimary: '#2596be',
+                        colorPrimaryHover: '#40a9d1',
+                        colorPrimaryActive: '#1e7ba0',
+                        colorLink: '#2596be',
+                        colorLinkHover: '#40a9d1',
+                        colorLinkActive: '#1e7ba0',
                     },
                 }}
             >

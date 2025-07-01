@@ -1,8 +1,10 @@
 import UiLayoutWrapper from './lib/UiLayoutWrapper';
 import WagmiWrapper from './lib/WagmiWrapper';
+import ErrorBoundary from './lib/ErrorBoundary';
 import Script from 'next/script';
 
 import './globals.css';
+import { siteConfig } from './constants';
 
 export default function RootLayout({ children }) {
     return (
@@ -11,17 +13,19 @@ export default function RootLayout({ children }) {
             <head>
                 <link rel="icon" href="/favicon.ico" sizes="any" />
                 <title>
-                    Cleared | Distributed data management and security
+                    {siteConfig.title}
                 </title>
                 <meta
                     name="description"
-                    content="Distributed data management and security"
+                    content={siteConfig.description}
                 />
             </head>
             <body>
-                <WagmiWrapper>
-                    <UiLayoutWrapper>{children}</UiLayoutWrapper>
-                </WagmiWrapper>
+                <ErrorBoundary>
+                    <WagmiWrapper>
+                        <UiLayoutWrapper>{children}</UiLayoutWrapper>
+                    </WagmiWrapper>
+                </ErrorBoundary>
             </body>
         </html>
     );

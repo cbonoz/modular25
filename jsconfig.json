@@ -1,4 +1,12 @@
 {
+  "exclude": [
+    "node_modules",
+    "build",
+    "dist",
+    "coverage",
+    ".next",
+    "out"
+  ],
   "compilerOptions": {
     "baseUrl": "app/",
     "paths": {
