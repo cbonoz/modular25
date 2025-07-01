@@ -89,26 +89,26 @@ const getError = (error) => {
 
 export const humanError = err => {
   let message = getError(err);
-  
+
   // Network and connection errors
   if (message.indexOf('404') !== -1) {
     message = 'Entry not found. Do you have the correct url?';
   } else if (message.indexOf('network changed') !== -1) {
     message = 'Network changed since page loaded, please refresh.';
-  } 
+  }
   // Gas and funding errors
-  else if (message.indexOf('insufficient funds') !== -1 || 
+  else if (message.indexOf('insufficient funds') !== -1 ||
            message.indexOf('gas required exceeds allowance') !== -1) {
     message = 'Insufficient funds in your wallet for gas fees. Please add some funds and try again.';
-  } else if (message.indexOf('failed to estimate gas') !== -1 || 
+  } else if (message.indexOf('failed to estimate gas') !== -1 ||
              message.indexOf('gas estimation failed') !== -1) {
     message = 'Unable to estimate gas fees. This usually means you need more funds in your wallet for transaction fees.';
-  } else if (message.indexOf('ApplyWithGasOnState failed') !== -1 || 
+  } else if (message.indexOf('ApplyWithGasOnState failed') !== -1 ||
              message.indexOf('actor not found') !== -1) {
     message = 'Transaction failed. Please check that you have sufficient funds for gas fees and try again.';
   }
   // User interaction errors
-  else if (message.indexOf('user rejected') !== -1 || 
+  else if (message.indexOf('user rejected') !== -1 ||
            message.indexOf('User denied') !== -1) {
     message = 'Transaction was cancelled by user.';
   }
@@ -116,7 +116,7 @@ export const humanError = err => {
   else if (message.indexOf('execution reverted') !== -1) {
     message = 'Transaction failed. Please check your inputs and try again.';
   }
-  
+
   return message;
 }
 
