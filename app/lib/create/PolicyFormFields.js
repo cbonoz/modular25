@@ -1,8 +1,12 @@
 'use client';
 
 import React from 'react';
-import { Input, Select, Card, Row, Col } from 'antd';
+import { Input, Select, Row, Col, Tooltip } from 'antd';
+import { InfoCircleOutlined } from '@ant-design/icons';
+import { US_STATES } from '../../constants';
 import TextArea from 'antd/es/input/TextArea';
+
+const { Option } = Select;
 
 const PolicyFormFields = ({
     data,
@@ -21,132 +25,140 @@ const PolicyFormFields = ({
         { value: 'other', label: 'Other' }
     ];
 
-    const businessLocations = [
-        { value: 'california', label: 'California, USA' },
-        { value: 'new-york', label: 'New York, USA' },
-        { value: 'texas', label: 'Texas, USA' },
-        { value: 'florida', label: 'Florida, USA' },
-        { value: 'washington', label: 'Washington, USA' },
-        { value: 'other-us', label: 'Other US State' },
-        { value: 'international', label: 'International' }
-    ];
-
-    const employeeCounts = [
+    const employeeCountOptions = [
         { value: '1-10', label: '1-10 employees' },
         { value: '11-50', label: '11-50 employees' },
         { value: '51-200', label: '51-200 employees' },
-        { value: '201-1000', label: '201-1000 employees' },
+        { value: '201-500', label: '201-500 employees' },
+        { value: '501-1000', label: '501-1000 employees' },
         { value: '1000+', label: '1000+ employees' }
     ];
 
-    const reimbursementCategories = [
-        { value: 'internet', label: 'Internet/Utilities' },
-        { value: 'phone', label: 'Phone/Mobile' },
-        { value: 'office-supplies', label: 'Office Supplies' },
-        { value: 'travel', label: 'Travel Expenses' },
-        { value: 'training', label: 'Training/Education' },
-        { value: 'health', label: 'Health/Wellness' },
+    const categories = [
+        { value: 'internet', label: 'Internet & Utilities' },
+        { value: 'equipment', label: 'Equipment & Hardware' },
+        { value: 'software', label: 'Software & Subscriptions' },
+        { value: 'travel', label: 'Travel & Transportation' },
+        { value: 'meals', label: 'Meals & Entertainment' },
+        { value: 'training', label: 'Training & Development' },
+        { value: 'healthcare', label: 'Healthcare & Wellness' },
+        { value: 'office', label: 'Office Supplies' },
         { value: 'other', label: 'Other' }
     ];
 
     return (
-        <Card>
-            <Row gutter={16}>
-                <Col span={12}>
-                    <h4>Policy Name</h4>
-                    <Input
-                        placeholder="e.g., Remote Work Internet Reimbursement Policy"
-                        value={data.name}
-                        onChange={(e) => updateData('name', e.target.value)}
-                    />
-                </Col>
-                <Col span={12}>
-                    <h4>Maximum Reimbursement Amount (USD)</h4>
-                    <Input
-                        type="number"
-                        placeholder="e.g., 100"
-                        value={data.maxAmount}
-                        onChange={(e) => updateData('maxAmount', e.target.value)}
-                        min="1"
-                        step="1"
-                    />
-                </Col>
-            </Row>
-            <br />
+        <div>
+            <h4>Policy Details</h4>
+            <Input
+                placeholder="Policy name (e.g., Remote Work Reimbursement Policy)"
+                value={data.name}
+                onChange={(e) => updateData('name', e.target.value)}
+                style={{ marginBottom: '16px' }}
+            />
 
-            <h4>Policy Description</h4>
             <TextArea
                 rows={3}
                 placeholder="Describe the purpose and scope of this reimbursement policy..."
                 value={data.description}
                 onChange={(e) => updateData('description', e.target.value)}
+                style={{ marginBottom: '16px' }}
             />
-            <br />
-            <br />
 
-            <Row gutter={16}>
+            <Row gutter={16} style={{ marginBottom: '16px' }}>
                 <Col span={12}>
-                    <h4>Business Type</h4>
+                    <label>Business Type</label>
                     <Select
-                        style={{ width: '100%' }}
                         placeholder="Select business type"
                         value={data.businessType}
                         onChange={(value) => updateData('businessType', value)}
-                        options={businessTypes}
-                    />
+                        style={{ width: '100%' }}
+                    >
+                        {businessTypes.map(type => (
+                            <Option key={type.value} value={type.value}>
+                                {type.label}
+                            </Option>
+                        ))}
+                    </Select>
                 </Col>
                 <Col span={12}>
-                    <h4>Reimbursement Category</h4>
+                    <label>
+                        Business Location
+                        <Tooltip title="Select the primary state/location where your business operates">
+                            <InfoCircleOutlined style={{ marginLeft: '4px' }} />
+                        </Tooltip>
+                    </label>
                     <Select
+                        placeholder="Select state/location"
+                        value={data.location}
+                        onChange={(value) => updateData('location', value)}
                         style={{ width: '100%' }}
+                        showSearch
+                        filterOption={(input, option) =>
+                            option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0
+                        }
+                    >
+                        {US_STATES.map(state => (
+                            <Option key={state.value} value={state.value}>
+                                {state.label}
+                            </Option>
+                        ))}
+                    </Select>
+                </Col>
+            </Row>
+
+            <Row gutter={16} style={{ marginBottom: '16px' }}>
+                <Col span={12}>
+                    <label>Employee Count</label>
+                    <Select
+                        placeholder="Select employee count"
+                        value={data.employeeCount}
+                        onChange={(value) => updateData('employeeCount', value)}
+                        style={{ width: '100%' }}
+                    >
+                        {employeeCountOptions.map(option => (
+                            <Option key={option.value} value={option.value}>
+                                {option.label}
+                            </Option>
+                        ))}
+                    </Select>
+                </Col>
+                <Col span={12}>
+                    <label>Reimbursement Category</label>
+                    <Select
                         placeholder="Select category"
                         value={data.category}
                         onChange={(value) => updateData('category', value)}
-                        options={reimbursementCategories}
+                        style={{ width: '100%' }}
+                    >
+                        {categories.map(category => (
+                            <Option key={category.value} value={category.value}>
+                                {category.label}
+                            </Option>
+                        ))}
+                    </Select>
+                </Col>
+            </Row>
+
+            <Row gutter={16} style={{ marginBottom: '16px' }}>
+                <Col span={12}>
+                    <label>
+                        Maximum Reimbursement Amount (USD)
+                        <Tooltip title="Maximum amount per claim that can be reimbursed">
+                            <InfoCircleOutlined style={{ marginLeft: '4px' }} />
+                        </Tooltip>
+                    </label>
+                    <Input
+                        type="number"
+                        placeholder="e.g., 100"
+                        value={data.maxAmount}
+                        onChange={(e) => updateData('maxAmount', e.target.value)}
+                        prefix="$"
+                        min="1"
+                        step="1"
                     />
                 </Col>
             </Row>
-            <br />
-
-            <Row gutter={16}>
-                <Col span={12}>
-                    <h4>Business Location</h4>
-                    <Select
-                        style={{ width: '100%' }}
-                        placeholder="Select business location"
-                        value={data.location}
-                        onChange={(value) => updateData('location', value)}
-                        options={businessLocations}
-                    />
-                </Col>
-                <Col span={12}>
-                    <h4>Number of Employees</h4>
-                    <Select
-                        style={{ width: '100%' }}
-                        placeholder="Select company size"
-                        value={data.employeeCount}
-                        onChange={(value) => updateData('employeeCount', value)}
-                        options={employeeCounts}
-                    />
-                </Col>
-            </Row>
-            <br />
-
-            <h4>Initial Contract Funding (USDFC)</h4>
-            <Input
-                type="number"
-                placeholder="Enter initial USDFC funding amount (optional)"
-                value={initialFunding}
-                onChange={(e) => setInitialFunding(e.target.value)}
-                min="0"
-                step="0.01"
-            />
-            <p style={{ fontSize: '12px', color: '#666', marginTop: '8px' }}>
-                Your USDFC balance: {parseFloat(userUSDFCBalance).toFixed(4)} USDFC
-                <br />
-                You can fund the contract now or later from the policy management page.
-            </p>
-        </Card>
+        </div>
     );
 };
 

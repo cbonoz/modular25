@@ -209,8 +209,10 @@ export const getUserUSDFCBalance = async (signer, userAddress) => {
 // Fund contract with USDFC
 export const fundContractWithUSDFC = async (signer, contractAddress, amountString) => {
     try {
-        // Convert amount from string to proper units (6 decimals for USDFC)
-        const amount = ethers.utils.parseUnits(amountString.toString(), 6);
+        // Convert amount from string to proper units (18 decimals to match contract expectation)
+        const amount = ethers.utils.parseUnits(amountString.toString(), 18);
+        
+        console.log('Funding contract - Input amount:', amountString, 'Parsed amount:', amount.toString());
         
         // First approve the contract to spend USDFC
         const usdtcContract = new ethers.Contract(USDFC_TOKEN_ADDRESS, [
@@ -247,8 +249,10 @@ export const fundContractWithUSDFC = async (signer, contractAddress, amountStrin
 // Withdraw USDFC from contract (owner only)
 export const withdrawFromContract = async (signer, contractAddress, amountString) => {
     try {
-        // Convert amount from string to proper units (6 decimals for USDFC)
-        const amount = ethers.utils.parseUnits(amountString.toString(), 6);
+        // Convert amount from string to proper units (18 decimals to match contract expectation)
+        const amount = ethers.utils.parseUnits(amountString.toString(), 18);
+        
+        console.log('Withdrawing from contract - Input amount:', amountString, 'Parsed amount:', amount.toString());
         
         const contract = new ethers.Contract(contractAddress, CLEARED_CONTRACT.abi, signer);
 

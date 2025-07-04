@@ -38,13 +38,13 @@ const OwnerFundingCard = ({
                         <Col span={12}>
                             <p><strong>Contract USDFC Balance:</strong></p>
                             <p style={{ fontSize: '18px', color: '#1890ff' }}>
-                                {ethers.utils.formatUnits(contractUSDFCBalance, 6)} USDFC
+                                {ethers.utils.formatUnits(contractUSDFCBalance, 18)} USDFC
                             </p>
                         </Col>
                         <Col span={12}>
                             <p><strong>Your USDFC Balance:</strong></p>
                             <p style={{ fontSize: '16px' }}>
-                                {ethers.utils.formatUnits(userUSDFCBalance, 6)} USDFC
+                                {ethers.utils.formatUnits(userUSDFCBalance, 18)} USDFC
                             </p>
                         </Col>
                     </Row>
@@ -55,7 +55,7 @@ const OwnerFundingCard = ({
                         <Col span={8}>
                             <Statistic
                                 title="Total Funded"
-                                value={ethers.utils.formatUnits(fundingInfo.totalFunded, 6)}
+                                value={ethers.utils.formatUnits(fundingInfo.totalFunded, 18)}
                                 prefix="$"
                                 precision={2}
                             />
@@ -63,7 +63,7 @@ const OwnerFundingCard = ({
                         <Col span={8}>
                             <Statistic
                                 title="Total Reimbursed"
-                                value={ethers.utils.formatUnits(fundingInfo.totalReimbursed, 6)}
+                                value={ethers.utils.formatUnits(fundingInfo.totalReimbursed, 18)}
                                 prefix="$"
                                 precision={2}
                             />
@@ -71,7 +71,7 @@ const OwnerFundingCard = ({
                         <Col span={8}>
                             <Statistic
                                 title="Available Balance"
-                                value={ethers.utils.formatUnits(fundingInfo.remainingBalance, 6)}
+                                value={ethers.utils.formatUnits(fundingInfo.remainingBalance, 18)}
                                 prefix="$"
                                 valueStyle={{ color: '#3f8600' }}
                                 precision={2}
@@ -117,7 +117,7 @@ const OwnerFundingCard = ({
                                 step="0.01"
                                 prefix="$"
                                 suffix="USDFC"
-                                max={ethers.utils.formatUnits(contractUSDFCBalance, 6)}
+                                max={ethers.utils.formatUnits(contractUSDFCBalance, 18)}
                             />
                             <Button
                                 onClick={onWithdrawFromContract}
@@ -130,7 +130,7 @@ const OwnerFundingCard = ({
                         <p style={{ fontSize: '12px', color: '#666', marginTop: '8px' }}>
                             <Tooltip title="Maximum amount that can be withdrawn">
                                 <InfoCircleOutlined style={{ marginRight: '4px' }} />
-                                Available to withdraw: {ethers.utils.formatUnits(contractUSDFCBalance, 6)} USDFC
+                                Available to withdraw: {ethers.utils.formatUnits(contractUSDFCBalance, 18)} USDFC
                             </Tooltip>
                         </p>
                     </div>

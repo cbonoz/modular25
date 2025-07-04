@@ -63,7 +63,7 @@ const PolicyDetail = ({ uploadId }) => {
     const [result, setResult] = useState();
     const [files, setFiles] = useState([]);
     const [validateFiles, setValidateFiles] = useState([]);
-    const [activeTab, setActiveTab] = useState('1');
+    const [activeTab, setActiveTab] = useState('');
     const [shouldUpload, setShouldUpload] = useState(true);
     const [notes, setNotes] = useState('');
     const [error, setError] = useState();
@@ -431,30 +431,6 @@ const PolicyDetail = ({ uploadId }) => {
         ),
     };
 
-    // Validation tab
-    const validationTab = {
-        key: '2',
-        label: 'Validate Receipt',
-        children: (
-            <div>
-                <h4>Receipt Validation</h4>
-                <p>Upload a receipt to check if it exists in the system:</p>
-                <FileDrop
-                    files={validateFiles}
-                    setFiles={(files) => setValidateFiles(files)}
-                />
-                <Button
-                    type="dashed"
-                    onClick={validateReceiptHash}
-                    loading={rpcLoading}
-                    disabled={rpcLoading || isEmpty(validateFiles)}
-                >
-                    Validate Receipt
-                </Button>
-            </div>
-        ),
-    };
-
     // Claims history tab
     const claimsHistoryTab = {
         key: '3',
@@ -473,7 +449,7 @@ const PolicyDetail = ({ uploadId }) => {
     const ownerTabs = [
         {
             key: '4',
-            label: `Manage Claims (${allClaims.length})`,
+            label: `View Claims (${allClaims.length})`,
             children: (
                 <ClaimsList
                     claims={allClaims}
@@ -545,7 +521,7 @@ const PolicyDetail = ({ uploadId }) => {
                                     }}>
                                         <div style={{ color: '#666', fontSize: '14px', marginBottom: '4px' }}>Total Funded</div>
                                         <div style={{ fontSize: '24px', fontWeight: '600' }}>
-                                            ${parseFloat(ethers.utils.formatUnits(fundingInfo.totalFunded, 6)).toFixed(2)}
+                                            ${parseFloat(ethers.utils.formatUnits(fundingInfo.totalFunded, 18)).toFixed(2)}
                                         </div>
                                     </div>
                                 </Col>
@@ -558,7 +534,7 @@ const PolicyDetail = ({ uploadId }) => {
                                     }}>
                                         <div style={{ color: '#666', fontSize: '14px', marginBottom: '4px' }}>Total Reimbursed</div>
                                         <div style={{ fontSize: '24px', fontWeight: '600' }}>
-                                            ${parseFloat(ethers.utils.formatUnits(fundingInfo.totalReimbursed, 6)).toFixed(2)}
+                                            ${parseFloat(ethers.utils.formatUnits(fundingInfo.totalReimbursed, 18)).toFixed(2)}
                                         </div>
                                     </div>
                                 </Col>
@@ -571,7 +547,7 @@ const PolicyDetail = ({ uploadId }) => {
                                     }}>
                                         <div style={{ color: '#666', fontSize: '14px', marginBottom: '4px' }}>Remaining Balance</div>
                                         <div style={{ fontSize: '24px', fontWeight: '600', color: '#52c41a' }}>
-                                            ${parseFloat(ethers.utils.formatUnits(fundingInfo.remainingBalance, 6)).toFixed(2)}
+                                            ${parseFloat(ethers.utils.formatUnits(fundingInfo.remainingBalance, 18)).toFixed(2)}
                                         </div>
                                     </div>
                                 </Col>
@@ -583,14 +559,22 @@ const PolicyDetail = ({ uploadId }) => {
         }
     ];
 
-    const tabItems = [validationTab];
+    const tabItems = [];
 
     if (!isOwner) {
-        tabItems.unshift(employeeTab);
+        tabItems.push(employeeTab);
         tabItems.push(claimsHistoryTab);
     } else {
         tabItems.push(...ownerTabs);
     }
+
+    // Set default active tab when data loads or user role is determined
+    useEffect(() => {
+        if (data && activeTab === '') {
+            const defaultTab = !isOwner ? '1' : '4'; // Employee: Submit Claim, Owner: View Claims
+            setActiveTab(defaultTab);
+        }
+    }, [data, isOwner, activeTab]);
 
     return (
         <div style={{ minHeight: '100vh', background: '#f5f5f5' }}>
@@ -750,8 +734,28 @@ const PolicyDetail = ({ uploadId }) => {
                                             <Col xs={12} sm={6}>
                                                 <div>
                                                     <div style={{ fontSize: '14px', opacity: 0.8 }}>Status</div>
-                                                    <div style={{ fontSize: '16px', fontWeight: '600' }}>
-                                                        {data?.policyParams?.isActive ? '✅ Active' : '❌ Inactive'}
+                                                    <div style={{ fontSize: '16px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                        {(() => {
+                                                            // Check if balance is zero for both owners and employees
+                                                            const balance = parseFloat(ethers.utils.formatUnits(contractUSDFCBalance || '0', 18));
+                                                            const isBalanceZero = balance === 0;
+                                                            const isActive = data?.policyParams?.isActive && !isBalanceZero;
+                                                            
+                                                            return (
+                                                                <>
+                                                                    <span>{isActive ? '✅ Active' : '❌ Inactive'}</span>
+                                                                    {!isActive && isBalanceZero && (
+                                                                        <div style={{ 
+                                                                            fontSize: '12px', 
+                                                                            color: 'rgba(255,255,255,0.7)',
+                                                                            fontWeight: 'normal'
+                                                                        }}>
+                                                                            (Needs funding)
+                                                                        </div>
+                                                                    )}
+                                                                </>
+                                                            );
+                                                        })()}
                                                     </div>
                                                 </div>
                                             </Col>
@@ -759,26 +763,29 @@ const PolicyDetail = ({ uploadId }) => {
                                     </div>
                                 </Col>
                                 
-                                <Col xs={24} lg={8}>
-                                    <div style={{ textAlign: 'right' }}>
-                                        <div style={{ 
-                                            background: 'rgba(255,255,255,0.1)', 
-                                            borderRadius: '12px', 
-                                            padding: '24px',
-                                            backdropFilter: 'blur(10px)'
-                                        }}>
-                                            <div style={{ fontSize: '14px', opacity: 0.8, marginBottom: '8px' }}>
-                                                Available Balance
-                                            </div>
-                                            <div style={{ fontSize: '32px', fontWeight: 'bold', marginBottom: '16px' }}>
-                                                ${parseFloat(ethers.utils.formatUnits(contractUSDFCBalance || '0', 6)).toFixed(2)}
-                                            </div>
-                                            <div style={{ fontSize: '12px', opacity: 0.7 }}>
-                                                USDFC in contract
+                                {/* Only show balance for owners */}
+                                {isOwner && (
+                                    <Col xs={24} lg={8}>
+                                        <div style={{ textAlign: 'right' }}>
+                                            <div style={{ 
+                                                background: 'rgba(255,255,255,0.1)', 
+                                                borderRadius: '12px', 
+                                                padding: '24px',
+                                                backdropFilter: 'blur(10px)'
+                                            }}>
+                                                <div style={{ fontSize: '14px', opacity: 0.8, marginBottom: '8px' }}>
+                                                    Available Balance
+                                                </div>
+                                                <div style={{ fontSize: '32px', fontWeight: 'bold', marginBottom: '16px' }}>
+                                                    ${parseFloat(ethers.utils.formatUnits(contractUSDFCBalance || '0', 18)).toFixed(2)}
+                                                </div>
+                                                <div style={{ fontSize: '12px', opacity: 0.7 }}>
+                                                    USDFC in contract
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                </Col>
+                                    </Col>
+                                )}
                             </Row>
                         </div>
                     </div>
