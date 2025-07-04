@@ -32,7 +32,7 @@ const EmployeeClaimForm = ({
 }) => {
     return (
         <div>
-            <h4>Submit Reimbursement Request</h4>
+            <h4>Request reimbursement</h4>
 
             {!data?.policyParams?.isActive && (
                 <div style={{
@@ -118,11 +118,11 @@ const EmployeeClaimForm = ({
                     <InfoCircleOutlined />
                 </Tooltip>
             </p>
-            <FileDrop
+            {shouldUpload && <FileDrop
                 files={files}
                 setFiles={(files) => setFiles(files)}
                 disabled={!data?.policyParams?.isActive}
-            />
+            />}
             <br />
 
             <Button

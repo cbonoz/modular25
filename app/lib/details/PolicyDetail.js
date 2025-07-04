@@ -56,8 +56,10 @@ import { InfoCircleOutlined } from '@ant-design/icons';
 import { uploadFiles } from '../../util/stor';
 
 const PolicyDetail = ({ uploadId }) => {
+    const [pageLoading, setPageLoading] = useState(true);
     const [loading, setLoading] = useState(false);
     const [rpcLoading, setRpcLoading] = useState(false);
+    const [walletLoading, setWalletLoading] = useState(true);
     const [result, setResult] = useState();
     const [files, setFiles] = useState([]);
     const [validateFiles, setValidateFiles] = useState([]);
@@ -89,19 +91,33 @@ const PolicyDetail = ({ uploadId }) => {
 
     const isOwner = data?.owner === address;
 
-    // Handle network changes
+    // Handle network changes and initial loading
     useEffect(() => {
         if (isConnected && chain) {
             console.log('Network changed to:', chain.name, chain.id);
             setError(undefined);
             setNetworkError(false);
+            setWalletLoading(false);
 
             if (!CHAIN_MAP[chain.id]) {
                 setNetworkError(true);
                 setError(`Unsupported network. Please switch to ${ACTIVE_CHAIN.name} and refresh`);
             }
+        } else if (isConnected === false) {
+            // User is definitively not connected
+            setWalletLoading(false);
         }
     }, [chain?.id, isConnected]);
+
+    // Initial page load effect
+    useEffect(() => {
+        // Set a timeout to stop wallet loading after 2 seconds
+        const timeout = setTimeout(() => {
+            setWalletLoading(false);
+        }, 2000);
+
+        return () => clearTimeout(timeout);
+    }, []);
 
     const breadcrumbs = [
         {
@@ -364,7 +380,25 @@ const PolicyDetail = ({ uploadId }) => {
         }
     }, [error, data, isOwner]);
 
-    if (!signer) {
+    if (walletLoading) {
+        return (
+            <Card title="Loading Policy Portal">
+                <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    minHeight: '200px',
+                    textAlign: 'center'
+                }}>
+                    <Spin size="large" />
+                    <p style={{ marginTop: '16px', color: '#666' }}>Checking wallet connection...</p>
+                </div>
+            </Card>
+        );
+    }
+
+    if (!signer && !walletLoading) {
         return (
             <Card title="Reimbursement Policy Portal">
                 <p className="bold">Connect your wallet to access this policy portal.</p>
@@ -377,7 +411,7 @@ const PolicyDetail = ({ uploadId }) => {
     // Employee tab - Submit reimbursement claim
     const employeeTab = {
         key: '1',
-        label: 'Submit Reimbursement Claim',
+        label: 'Submit Claim',
         children: (
             <EmployeeClaimForm
                 data={data}
@@ -429,25 +463,125 @@ const PolicyDetail = ({ uploadId }) => {
             <ClaimsList
                 claims={employeeClaims}
                 isOwner={false}
-                onProcessClaim={null} // Employees can't process claims
+                onProcessClaim={null}
                 rpcLoading={rpcLoading}
             />
         ),
     };
 
-    // Owner management tab
-    const ownerManagementTab = {
-        key: '4',
-        label: `Manage Claims (${allClaims.length})`,
-        children: (
-            <ClaimsList
-                claims={allClaims}
-                isOwner={true}
-                onProcessClaim={handleProcessClaim}
-                rpcLoading={rpcLoading}
-            />
-        ),
-    };
+    // Owner management tabs
+    const ownerTabs = [
+        {
+            key: '4',
+            label: `Manage Claims (${allClaims.length})`,
+            children: (
+                <ClaimsList
+                    claims={allClaims}
+                    isOwner={true}
+                    onProcessClaim={handleProcessClaim}
+                    rpcLoading={rpcLoading}
+                />
+            ),
+        },
+        {
+            key: '5',
+            label: 'Funding Management',
+            children: (
+                <div>
+                    <h4>Policy Funding Management</h4>
+                    <Card>
+                        <Row gutter={16}>
+                            <Col span={12}>
+                                <h4>Add Funds</h4>
+                                <Input
+                                    type="number"
+                                    placeholder="Amount to fund"
+                                    value={fundingAmount}
+                                    onChange={(e) => setFundingAmount(e.target.value)}
+                                    prefix="$"
+                                    suffix="USDFC"
+                                />
+                                <Button
+                                    type="primary"
+                                    onClick={handleFundContract}
+                                    loading={rpcLoading}
+                                    disabled={!fundingAmount || rpcLoading || parseFloat(fundingAmount) <= 0}
+                                    style={{ marginTop: '10px' }}
+                                >
+                                    Fund Policy
+                                </Button>
+                            </Col>
+                            <Col span={12}>
+                                <h4>Withdraw Funds</h4>
+                                <Input
+                                    type="number"
+                                    placeholder="Amount to withdraw"
+                                    value={withdrawAmount}
+                                    onChange={(e) => setWithdrawAmount(e.target.value)}
+                                    prefix="$"
+                                    suffix="USDFC"
+                                />
+                                <Button
+                                    type="default"
+                                    onClick={handleWithdrawFromContract}
+                                    loading={rpcLoading}
+                                    disabled={!withdrawAmount || rpcLoading || parseFloat(withdrawAmount) <= 0}
+                                    style={{ marginTop: '10px' }}
+                                >
+                                    Withdraw
+                                </Button>
+                            </Col>
+                        </Row>
+                        <Divider />
+                        <div>
+                            <h4>Funding Statistics</h4>
+                            <Row gutter={[16, 16]} style={{ marginTop: '16px' }}>
+                                <Col span={8}>
+                                    <div style={{ 
+                                        background: 'white', 
+                                        padding: '16px', 
+                                        borderRadius: '8px', 
+                                        boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                                    }}>
+                                        <div style={{ color: '#666', fontSize: '14px', marginBottom: '4px' }}>Total Funded</div>
+                                        <div style={{ fontSize: '24px', fontWeight: '600' }}>
+                                            ${parseFloat(ethers.utils.formatUnits(fundingInfo.totalFunded, 6)).toFixed(2)}
+                                        </div>
+                                    </div>
+                                </Col>
+                                <Col span={8}>
+                                    <div style={{ 
+                                        background: 'white', 
+                                        padding: '16px', 
+                                        borderRadius: '8px', 
+                                        boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                                    }}>
+                                        <div style={{ color: '#666', fontSize: '14px', marginBottom: '4px' }}>Total Reimbursed</div>
+                                        <div style={{ fontSize: '24px', fontWeight: '600' }}>
+                                            ${parseFloat(ethers.utils.formatUnits(fundingInfo.totalReimbursed, 6)).toFixed(2)}
+                                        </div>
+                                    </div>
+                                </Col>
+                                <Col span={8}>
+                                    <div style={{ 
+                                        background: 'white', 
+                                        padding: '16px', 
+                                        borderRadius: '8px', 
+                                        boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                                    }}>
+                                        <div style={{ color: '#666', fontSize: '14px', marginBottom: '4px' }}>Remaining Balance</div>
+                                        <div style={{ fontSize: '24px', fontWeight: '600', color: '#52c41a' }}>
+                                            ${parseFloat(ethers.utils.formatUnits(fundingInfo.remainingBalance, 6)).toFixed(2)}
+                                        </div>
+                                    </div>
+                                </Col>
+                            </Row>
+                        </div>
+                    </Card>
+                </div>
+            ),
+        }
+    ];
 
     const tabItems = [validationTab];
 
@@ -455,166 +589,211 @@ const PolicyDetail = ({ uploadId }) => {
         tabItems.unshift(employeeTab);
         tabItems.push(claimsHistoryTab);
     } else {
-        tabItems.push(ownerManagementTab);
+        tabItems.push(...ownerTabs);
     }
 
     return (
-        <div className="policy-detail-page">
-            <Breadcrumb items={breadcrumbs} />
-            <br />
-            <Card
-                title={
-                    <span
-                        style={{
-                            color:
-                                cardTitle.indexOf('Policy') !== -1 || cardTitle.indexOf('Employee') !== -1
-                                    ? 'green'
-                                    : 'red',
-                        }}
-                    >
-                        {cardTitle}
-                    </span>
-                }
-            >
-                {loading ? (
-                    <div style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        minHeight: '400px',
-                        textAlign: 'center'
+        <div style={{ minHeight: '100vh', background: '#f5f5f5' }}>
+            <Breadcrumb 
+                items={breadcrumbs} 
+                style={{ padding: '16px 24px', background: 'white', borderBottom: '1px solid #f0f0f0' }}
+            />
+            
+            {loading ? (
+                <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    minHeight: '400px',
+                    textAlign: 'center'
+                }}>
+                    <Spin size="large" />
+                    <h3 style={{ margin: '20px 0', color: '#666' }}>Loading Policy Information...</h3>
+                    <p style={{ color: '#999', fontSize: '14px' }}>
+                        Fetching contract data and USDFC balances
+                    </p>
+                </div>
+            ) : error && !data ? (
+                <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    minHeight: '400px',
+                    textAlign: 'center',
+                    padding: '40px'
+                }}>
+                    <div style={{ fontSize: '48px', marginBottom: '20px' }}>🔍</div>
+                    <h3 style={{ color: '#ff4d4f', marginBottom: '16px' }}>Policy Not Found</h3>
+                    <p style={{ color: '#666', fontSize: '16px', marginBottom: '24px', maxWidth: '500px' }}>
+                        The contract or policy could not be found. This might happen if:
+                    </p>
+                    <ul style={{
+                        textAlign: 'left',
+                        color: '#666',
+                        fontSize: '14px',
+                        marginBottom: '24px',
+                        listStyle: 'none',
+                        padding: 0
                     }}>
-                        <Spin size="large" />
-                        <h3 style={{ margin: '20px 0', color: '#666' }}>Loading Policy Information...</h3>
-                        <p style={{ color: '#999', fontSize: '14px' }}>
-                            Fetching contract data and USDFC balances
-                        </p>
+                        <li style={{ marginBottom: '8px' }}>• The policy link is incorrect or expired</li>
+                        <li style={{ marginBottom: '8px' }}>• The policy is still being created</li>
+                        <li style={{ marginBottom: '8px' }}>• Your wallet is connected to the wrong blockchain</li>
+                        <li style={{ marginBottom: '8px' }}>• The policy creation was unsuccessful</li>
+                    </ul>
+                    <div style={{ display: 'flex', gap: '12px' }}>
+                        <Button
+                            type="primary"
+                            onClick={() => window.location.reload()}
+                        >
+                            Retry
+                        </Button>
+                        <Button
+                            type="default"
+                            onClick={() => window.location.href = '/'}
+                        >
+                            Go Home
+                        </Button>
                     </div>
-                ) : error && !data ? (
-                    <div style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        minHeight: '400px',
-                        textAlign: 'center',
-                        padding: '40px'
-                    }}>
-                        <div style={{ fontSize: '48px', marginBottom: '20px' }}>🔍</div>
-                        <h3 style={{ color: '#ff4d4f', marginBottom: '16px' }}>Policy Not Found</h3>
-                        <p style={{ color: '#666', fontSize: '16px', marginBottom: '24px', maxWidth: '500px' }}>
-                            The contract or policy could not be found. This might happen if:
-                        </p>
-                        <ul style={{
-                            textAlign: 'left',
-                            color: '#666',
-                            fontSize: '14px',
-                            marginBottom: '24px',
-                            listStyle: 'none',
-                            padding: 0
+                    {networkError && isConnected && chain && !CHAIN_MAP[chain.id] && (
+                        <div style={{
+                            marginTop: '24px',
+                            padding: '16px',
+                            border: '1px solid #ff4d4f',
+                            borderRadius: '6px',
+                            backgroundColor: '#fff2f0',
+                            maxWidth: '400px'
                         }}>
-                            <li style={{ marginBottom: '8px' }}>• The policy link is incorrect or expired</li>
-                            <li style={{ marginBottom: '8px' }}>• The policy is still being created</li>
-                            <li style={{ marginBottom: '8px' }}>• Your wallet is connected to the wrong blockchain</li>
-                            <li style={{ marginBottom: '8px' }}>• The policy creation was unsuccessful</li>
-                        </ul>
-                        <div style={{ display: 'flex', gap: '12px' }}>
+                            <div style={{ marginBottom: '10px', color: '#ff4d4f', fontWeight: 'bold' }}>
+                                Wrong Network Detected
+                            </div>
+                            <div style={{ marginBottom: '15px', fontSize: '14px' }}>
+                                You're connected to <strong>{chain.name}</strong>.<br />
+                                This app requires <strong>{ACTIVE_CHAIN.name}</strong>.
+                            </div>
                             <Button
                                 type="primary"
-                                onClick={() => window.location.reload()}
+                                danger
+                                loading={isSwitching}
+                                onClick={async () => {
+                                    try {
+                                        console.log('Switching to network:', ACTIVE_CHAIN.id, ACTIVE_CHAIN);
+                                        await switchNetwork?.(ACTIVE_CHAIN.id);
+                                    } catch (error) {
+                                        console.error('Network switch failed:', error);
+                                    }
+                                }}
+                                style={{ width: '100%' }}
                             >
-                                Retry
-                            </Button>
-                            <Button
-                                type="default"
-                                onClick={() => window.location.href = '/'}
-                            >
-                                Go Home
+                                {isSwitching ? 'Switching...' : `Switch to ${ACTIVE_CHAIN.name}`}
                             </Button>
                         </div>
-                        {networkError && isConnected && chain && !CHAIN_MAP[chain.id] && (
-                            <div style={{
-                                marginTop: '24px',
-                                padding: '16px',
-                                border: '1px solid #ff4d4f',
-                                borderRadius: '6px',
-                                backgroundColor: '#fff2f0',
-                                maxWidth: '400px'
-                            }}>
-                                <div style={{ marginBottom: '10px', color: '#ff4d4f', fontWeight: 'bold' }}>
-                                    Wrong Network Detected
-                                </div>
-                                <div style={{ marginBottom: '15px', fontSize: '14px' }}>
-                                    You're connected to <strong>{chain.name}</strong>.<br />
-                                    This app requires <strong>{ACTIVE_CHAIN.name}</strong>.
-                                </div>
-                                <Button
-                                    type="primary"
-                                    danger
-                                    loading={isSwitching}
-                                    onClick={async () => {
-                                        try {
-                                            console.log('Switching to network:', ACTIVE_CHAIN.id, ACTIVE_CHAIN);
-                                            await switchNetwork?.(ACTIVE_CHAIN.id);
-                                        } catch (error) {
-                                            console.error('Network switch failed:', error);
-                                        }
-                                    }}
-                                    style={{ width: '100%' }}
-                                >
-                                    {isSwitching ? 'Switching...' : `Switch to ${ACTIVE_CHAIN.name}`}
-                                </Button>
-                            </div>
-                        )}
+                    )}
+                </div>
+            ) : (
+                <>
+                    {/* Hero Section */}
+                    <div style={{
+                        background: 'linear-gradient(135deg, #1890ff 0%, #722ed1 100%)',
+                        color: 'white',
+                        padding: '48px 24px',
+                        marginBottom: '24px'
+                    }}>
+                        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+                            <Row gutter={[32, 32]} align="middle">
+                                <Col xs={24} lg={16}>
+                                    <div>
+                                        <h1 style={{ 
+                                            fontSize: '36px', 
+                                            fontWeight: 'bold', 
+                                            color: 'white',
+                                            marginBottom: '16px',
+                                            margin: 0
+                                        }}>
+                                            {data?.name}
+                                        </h1>
+                                        <p style={{ 
+                                            fontSize: '18px', 
+                                            color: 'rgba(255,255,255,0.9)',
+                                            marginBottom: '24px',
+                                            lineHeight: '1.6'
+                                        }}>
+                                            {data?.description}
+                                        </p>
+                                        
+                                        <Row gutter={[24, 16]}>
+                                            <Col xs={12} sm={6}>
+                                                <div>
+                                                    <div style={{ fontSize: '14px', opacity: 0.8 }}>Category</div>
+                                                    <div style={{ fontSize: '16px', fontWeight: '600' }}>
+                                                        {data?.policyParams?.category || 'General'}
+                                                    </div>
+                                                </div>
+                                            </Col>
+                                            <Col xs={12} sm={6}>
+                                                <div>
+                                                    <div style={{ fontSize: '14px', opacity: 0.8 }}>Max Amount</div>
+                                                    <div style={{ fontSize: '16px', fontWeight: '600' }}>
+                                                        ${data?.policyParams?.maxAmount} USD
+                                                    </div>
+                                                </div>
+                                            </Col>
+                                            <Col xs={12} sm={6}>
+                                                <div>
+                                                    <div style={{ fontSize: '14px', opacity: 0.8 }}>Location</div>
+                                                    <div style={{ fontSize: '16px', fontWeight: '600' }}>
+                                                        {data?.policyParams?.location || 'Not specified'}
+                                                    </div>
+                                                </div>
+                                            </Col>
+                                            <Col xs={12} sm={6}>
+                                                <div>
+                                                    <div style={{ fontSize: '14px', opacity: 0.8 }}>Status</div>
+                                                    <div style={{ fontSize: '16px', fontWeight: '600' }}>
+                                                        {data?.policyParams?.isActive ? '✅ Active' : '❌ Inactive'}
+                                                    </div>
+                                                </div>
+                                            </Col>
+                                        </Row>
+                                    </div>
+                                </Col>
+                                
+                                <Col xs={24} lg={8}>
+                                    <div style={{ textAlign: 'right' }}>
+                                        <div style={{ 
+                                            background: 'rgba(255,255,255,0.1)', 
+                                            borderRadius: '12px', 
+                                            padding: '24px',
+                                            backdropFilter: 'blur(10px)'
+                                        }}>
+                                            <div style={{ fontSize: '14px', opacity: 0.8, marginBottom: '8px' }}>
+                                                Available Balance
+                                            </div>
+                                            <div style={{ fontSize: '32px', fontWeight: 'bold', marginBottom: '16px' }}>
+                                                ${parseFloat(ethers.utils.formatUnits(contractUSDFCBalance || '0', 6)).toFixed(2)}
+                                            </div>
+                                            <div style={{ fontSize: '12px', opacity: 0.7 }}>
+                                                USDFC in contract
+                                            </div>
+                                        </div>
+                                    </div>
+                                </Col>
+                            </Row>
+                        </div>
                     </div>
-                ) : (
-                    <>
-                        <Row
-                            gutter={{
-                                xs: 8,
-                                sm: 16,
-                                md: 24,
-                                lg: 32,
-                            }}
-                        >
-                    <Col span={12}>
-                        <div>
-                            <PolicyInfoCard
-                                data={data}
-                                isOwner={isOwner}
-                                onUpdatePolicyStatus={handleUpdatePolicyStatus}
-                            />
 
-                            {/* USDFC Funding Section - Owner Only */}
-                            {isOwner && (
-                                <OwnerFundingCard
-                                    contractUSDFCBalance={contractUSDFCBalance}
-                                    userUSDFCBalance={userUSDFCBalance}
-                                    fundingInfo={fundingInfo}
-                                    fundingAmount={fundingAmount}
-                                    setFundingAmount={setFundingAmount}
-                                    withdrawAmount={withdrawAmount}
-                                    setWithdrawAmount={setWithdrawAmount}
-                                    onFundContract={handleFundContract}
-                                    onWithdrawFromContract={handleWithdrawFromContract}
-                                    usdcLoading={usdcLoading}
-                                    rpcLoading={rpcLoading}
-                                />
-                            )}
-                        </div>
-                        <br />
-                        <p>
-                            <a
-                                href={getExplorerUrl(ACTIVE_CHAIN, uploadId)}
-                                target="_blank"
-                            >
-                                View contract on explorer
-                            </a>
-                        </p>
-                    </Col>
-                    <Col span={12}>
-                        <div>
+                    {/* Main Content */}
+                    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 24px' }}>
+                        {/* Main Actions */}
+                        <Card
+                            title={
+                                <span style={{ fontSize: '20px', fontWeight: '600' }}>
+                                    {isOwner ? 'Policy Management' : 'Employee Portal'}
+                                </span>
+                            }
+                            style={{ marginBottom: '24px' }}
+                        >
                             <Tabs
                                 activeKey={activeTab}
                                 tabPosition="top"
@@ -625,34 +804,91 @@ const PolicyDetail = ({ uploadId }) => {
                                     setActiveTab(key);
                                 }}
                                 items={tabItems}
-                                style={{ height: 'auto' }}
+                                style={{ minHeight: '400px' }}
                             />
-                        </div>
 
-                        {rpcLoading && (
-                            <div>
-                                <br />
-                                <Spin size="large" />
-                                <p>Processing transaction...</p>
-                            </div>
-                        )}
-                        <br />
-                        {result && (
-                            <ResultCard result={result} />
-                        )}
-
-                        {error && data && (
-                            <div className="error-text">
-                                <div style={{ marginBottom: '15px' }}>
-                                    Error: {error}
+                            {rpcLoading && (
+                                <div style={{ 
+                                    textAlign: 'center', 
+                                    padding: '24px',
+                                    background: '#f8f9fa',
+                                    borderRadius: '8px',
+                                    marginTop: '16px'
+                                }}>
+                                    <Spin size="large" />
+                                    <p style={{ marginTop: '16px', color: '#666' }}>Processing transaction...</p>
                                 </div>
+                            )}
+
+                            {result && (
+                                <div style={{ marginTop: '16px' }}>
+                                    <ResultCard result={result} />
+                                </div>
+                            )}
+
+                            {error && data && (
+                                <div style={{
+                                    background: '#fff2f0',
+                                    border: '1px solid #ffccc7',
+                                    borderRadius: '8px',
+                                    padding: '16px',
+                                    marginTop: '16px'
+                                }}>
+                                    <div style={{ color: '#ff4d4f', fontWeight: '600', marginBottom: '8px' }}>
+                                        Error
+                                    </div>
+                                    <div style={{ color: '#ff4d4f' }}>
+                                        {error}
+                                    </div>
+                                </div>
+                            )}
+                        </Card>
+
+                        {/* Additional Information */}
+                        <Card 
+                            title="Contract Information" 
+                            style={{ marginBottom: '24px' }}
+                            size="small"
+                        >
+                            <Row gutter={[16, 16]}>
+                                <Col xs={24} sm={12}>
+                                    <div>
+                                        <strong>Contract Address:</strong>
+                                        <div style={{ 
+                                            fontFamily: 'monospace', 
+                                            fontSize: '12px', 
+                                            background: '#f5f5f5',
+                                            padding: '4px 8px',
+                                            borderRadius: '4px',
+                                            marginTop: '4px'
+                                        }}>
+                                            {uploadId}
+                                        </div>
+                                    </div>
+                                </Col>
+                                <Col xs={24} sm={12}>
+                                    <div>
+                                        <strong>Business Type:</strong> {data?.policyParams?.businessType || 'Not specified'}
+                                        <br />
+                                        <strong>Employee Count:</strong> {data?.policyParams?.employeeCount || 'Not specified'}
+                                    </div>
+                                </Col>
+                            </Row>
+                            <Divider />
+                            <div style={{ textAlign: 'center' }}>
+                                <Button
+                                    type="link"
+                                    href={getExplorerUrl(ACTIVE_CHAIN, uploadId)}
+                                    target="_blank"
+                                    icon={<InfoCircleOutlined />}
+                                >
+                                    View Contract on Explorer
+                                </Button>
                             </div>
-                        )}
-                    </Col>
-                </Row>
-                    </>
-                )}
-            </Card>
+                        </Card>
+                    </div>
+                </>
+            )}
         </div>
     );
 };

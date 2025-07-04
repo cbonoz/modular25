@@ -160,6 +160,7 @@ export const validateReceipt = async (signer, address, receiptHash) => {
     const result = await contract.validateReceipt(receiptHash);
     console.log('validate receipt result', result);
     return {
+
         exists: result.exists,
         claimId: result.claimId.toNumber()
     };
@@ -206,8 +207,11 @@ export const getUserUSDFCBalance = async (signer, userAddress) => {
 };
 
 // Fund contract with USDFC
-export const fundContractWithUSDFC = async (signer, contractAddress, amount) => {
+export const fundContractWithUSDFC = async (signer, contractAddress, amountString) => {
     try {
+        // Convert amount from string to proper units (6 decimals for USDFC)
+        const amount = ethers.utils.parseUnits(amountString.toString(), 6);
+        
         // First approve the contract to spend USDFC
         const usdtcContract = new ethers.Contract(USDFC_TOKEN_ADDRESS, [
             'function approve(address spender, uint256 amount) external returns (bool)',
@@ -241,8 +245,11 @@ export const fundContractWithUSDFC = async (signer, contractAddress, amount) => 
 };
 
 // Withdraw USDFC from contract (owner only)
-export const withdrawFromContract = async (signer, contractAddress, amount) => {
+export const withdrawFromContract = async (signer, contractAddress, amountString) => {
     try {
+        // Convert amount from string to proper units (6 decimals for USDFC)
+        const amount = ethers.utils.parseUnits(amountString.toString(), 6);
+        
         const contract = new ethers.Contract(contractAddress, CLEARED_CONTRACT.abi, signer);
 
         console.log('Withdrawing from contract:', contractAddress, 'amount:', amount.toString());

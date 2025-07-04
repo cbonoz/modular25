@@ -1,18 +1,9 @@
 'use client';
 
 import React from 'react';
-import { ethers } from 'ethers';
-import {
-    Card,
-    Row,
-    Col,
-    Button,
-    Divider,
-    Spin,
-    Input,
-    Tooltip,
-} from 'antd';
+import { Card, Statistic, Row, Col, Input, Button, Divider, Spin, Tooltip } from 'antd';
 import { InfoCircleOutlined } from '@ant-design/icons';
+import { ethers } from 'ethers';
 
 const OwnerFundingCard = ({
     contractUSDFCBalance,
@@ -28,7 +19,17 @@ const OwnerFundingCard = ({
     onWithdrawFromContract
 }) => {
     return (
-        <Card title="USDFC Funding & Balance" style={{ marginTop: '16px' }}>
+        <Card 
+            title={
+                <span>
+                    USDFC Funding & Balance
+                    <Tooltip title="Manage USDFC funds for automatic reimbursements">
+                        <InfoCircleOutlined style={{ marginLeft: '8px' }} />
+                    </Tooltip>
+                </span>
+            }
+            style={{ marginTop: '16px' }}
+        >
             {usdcLoading ? (
                 <Spin size="small" />
             ) : (
@@ -37,13 +38,13 @@ const OwnerFundingCard = ({
                         <Col span={12}>
                             <p><strong>Contract USDFC Balance:</strong></p>
                             <p style={{ fontSize: '18px', color: '#1890ff' }}>
-                                {ethers.utils.formatEther(contractUSDFCBalance)} USDFC
+                                {ethers.utils.formatUnits(contractUSDFCBalance, 6)} USDFC
                             </p>
                         </Col>
                         <Col span={12}>
                             <p><strong>Your USDFC Balance:</strong></p>
                             <p style={{ fontSize: '16px' }}>
-                                {ethers.utils.formatEther(userUSDFCBalance)} USDFC
+                                {ethers.utils.formatUnits(userUSDFCBalance, 6)} USDFC
                             </p>
                         </Col>
                     </Row>
@@ -52,18 +53,29 @@ const OwnerFundingCard = ({
 
                     <Row gutter={16}>
                         <Col span={8}>
-                            <p><strong>Total Funded:</strong></p>
-                            <p>{ethers.utils.formatEther(fundingInfo.totalFunded)} USDFC</p>
+                            <Statistic
+                                title="Total Funded"
+                                value={ethers.utils.formatUnits(fundingInfo.totalFunded, 6)}
+                                prefix="$"
+                                precision={2}
+                            />
                         </Col>
                         <Col span={8}>
-                            <p><strong>Total Reimbursed:</strong></p>
-                            <p>{ethers.utils.formatEther(fundingInfo.totalReimbursed)} USDFC</p>
+                            <Statistic
+                                title="Total Reimbursed"
+                                value={ethers.utils.formatUnits(fundingInfo.totalReimbursed, 6)}
+                                prefix="$"
+                                precision={2}
+                            />
                         </Col>
                         <Col span={8}>
-                            <p><strong>Available Balance:</strong></p>
-                            <p style={{ color: '#52c41a' }}>
-                                {ethers.utils.formatEther(fundingInfo.remainingBalance)} USDFC
-                            </p>
+                            <Statistic
+                                title="Available Balance"
+                                value={ethers.utils.formatUnits(fundingInfo.remainingBalance, 6)}
+                                prefix="$"
+                                valueStyle={{ color: '#3f8600' }}
+                                precision={2}
+                            />
                         </Col>
                     </Row>
 
@@ -80,12 +92,14 @@ const OwnerFundingCard = ({
                                 type="number"
                                 min="0"
                                 step="0.01"
+                                prefix="$"
+                                suffix="USDFC"
                             />
                             <Button
                                 type="primary"
                                 onClick={onFundContract}
                                 loading={rpcLoading}
-                                disabled={!fundingAmount || parseFloat(fundingAmount) <= 0}
+                                disabled={!fundingAmount || rpcLoading || parseFloat(fundingAmount) <= 0}
                             >
                                 Fund Contract
                             </Button>
@@ -101,21 +115,22 @@ const OwnerFundingCard = ({
                                 type="number"
                                 min="0"
                                 step="0.01"
-                                max={ethers.utils.formatEther(contractUSDFCBalance)}
+                                prefix="$"
+                                suffix="USDFC"
+                                max={ethers.utils.formatUnits(contractUSDFCBalance, 6)}
                             />
                             <Button
-                                type="default"
                                 onClick={onWithdrawFromContract}
                                 loading={rpcLoading}
-                                disabled={!withdrawAmount || parseFloat(withdrawAmount) <= 0 || parseFloat(withdrawAmount) > parseFloat(ethers.utils.formatEther(contractUSDFCBalance))}
+                                disabled={!withdrawAmount || rpcLoading || parseFloat(withdrawAmount) <= 0}
                             >
                                 Withdraw
                             </Button>
                         </div>
                         <p style={{ fontSize: '12px', color: '#666', marginTop: '8px' }}>
-                            <Tooltip title="Manage USDFC funds for automatic reimbursements">
+                            <Tooltip title="Maximum amount that can be withdrawn">
                                 <InfoCircleOutlined style={{ marginRight: '4px' }} />
-                                Available to withdraw: {ethers.utils.formatEther(contractUSDFCBalance)} USDFC
+                                Available to withdraw: {ethers.utils.formatUnits(contractUSDFCBalance, 6)} USDFC
                             </Tooltip>
                         </p>
                     </div>

@@ -11,7 +11,6 @@ import {
     Divider,
     Checkbox,
     Card,
-    Image,
     Tooltip,
     Select,
     Switch,
@@ -35,12 +34,13 @@ import {
     MAX_FILE_SIZE_BYTES,
 } from '../../constants';
 import { FileDrop } from '../FileDrop';
-import { deployContract, fundContractWithUSDFC } from '../../util/appContract';
+import { deployContract } from '../../util/appContract';
 import { useAccount, useNetwork, useSwitchNetwork } from 'wagmi';
 import ConnectButton from '../ConnectButton';
 import { useEthersSigner } from '../../hooks/useEthersSigner';
 import { InfoCircleOutlined } from '@ant-design/icons';
 import PolicyFormFields from './PolicyFormFields';
+import Logo from '../Logo';
 
 function CreatePolicy() {
     const { address, isConnected } = useAccount();
@@ -56,7 +56,6 @@ function CreatePolicy() {
     const [pageLoading, setPageLoading] = useState(true);
     const [result, setResult] = useState();
     const [networkError, setNetworkError] = useState(false);
-    const [initialFunding, setInitialFunding] = useState('0');
 
     // Handle network changes
     useEffect(() => {
@@ -188,21 +187,7 @@ function CreatePolicy() {
             res['policyUrl'] = policyUrl(contract.address || cid);
             res['contractUrl'] = getExplorerUrl(activeChain, contract.address);
 
-            // 3) Fund contract with initial USDFC if specified
-            if (initialFunding && parseFloat(initialFunding) > 0) {
-                try {
-                    const { ethers } = await import('ethers');
-                    const fundingAmount = ethers.utils.parseEther(initialFunding);
-                    await fundContractWithUSDFC(signer, contract.address, fundingAmount);
-                    res['initialFunding'] = initialFunding;
-                    console.log('Contract funded with', initialFunding, 'USDFC');
-                } catch (fundingError) {
-                    console.warn('Contract deployed but funding failed:', fundingError);
-                    res['fundingError'] = humanError(fundingError);
-                }
-            }
-
-            // 4) Store additional metadata locally (optional)
+            // Store additional metadata locally (optional)
             const policyData = {
                 ...data,
                 address: contract.address,
@@ -275,13 +260,7 @@ function CreatePolicy() {
                     minHeight: '60vh',
                     textAlign: 'center'
                 }}>
-                    <Image
-                        className='pb-2 mb-2'
-                        src="logo.png"
-                        alt="Cleared Logo"
-                        width={180}
-                        height={37}
-                    />
+                    <Logo style={{ marginBottom: '16px' }} />
                     <br />
                     <Spin size="large" />
                     <h3 style={{ margin: '20px 0', color: '#666' }}>Loading Policy Creation Portal...</h3>
@@ -294,13 +273,7 @@ function CreatePolicy() {
                     <Row>
                         <Col span={24}>
                             <div className="centered">
-                                <Image
-                                    className='pb-2 mb-2'
-                                    src="logo.png"
-                                    alt="Cleared Logo"
-                                    width={180}
-                                    height={37}
-                                />
+                                <Logo style={{ marginBottom: '16px' }} />
                                 <h3 style={{ margin: '30px 0 40px 0', fontSize: '28px' }}>Create Reimbursement Policy</h3>
 
                         {isConnected && chain && !CHAIN_MAP[chain.id] && (
@@ -345,8 +318,6 @@ function CreatePolicy() {
                                 <PolicyFormFields
                                     data={data}
                                     updateData={updateData}
-                                    initialFunding={initialFunding}
-                                    setInitialFunding={setInitialFunding}
                                     userUSDFCBalance="0"
                                 />
 
@@ -374,7 +345,7 @@ function CreatePolicy() {
                                         }
                                     />
                                     <br />
-                                    <p className="text-sm text-gray-600">
+                                    <p style={{ fontSize: '12px', color: '#666' }}>
                                         Supported formats: PDF, DOC, TXT. This will help generate more accurate reimbursement rules.
                                     </p>
                                 </Card>
@@ -513,16 +484,6 @@ function CreatePolicy() {
                             <li>Max Amount: ${data.maxAmount} USD</li>
                             <li>Business Type: {data.businessType}</li>
                             <li>Location: {data.location}</li>
-                            {result.initialFunding && (
-                                <li style={{ color: '#52c41a', fontWeight: 'bold' }}>
-                                    ✅ Initial Funding: {result.initialFunding} USDFC
-                                </li>
-                            )}
-                            {result.fundingError && (
-                                <li style={{ color: '#ff4d4f' }}>
-                                    ⚠️ Funding Error: {result.fundingError}
-                                </li>
-                            )}
                         </ul>
                                     </div>
                                 </div>

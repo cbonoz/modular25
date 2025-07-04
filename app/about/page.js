@@ -1,7 +1,7 @@
 'use client';
 
 import { APP_DESC, APP_NAME, EXAMPLE_DATASETS, siteConfig } from '../constants';
-import Image from 'next/image';
+import Logo from '../lib/Logo';
 import Button from 'antd/es/button';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -15,12 +15,7 @@ export default function About() {
             <br />
 
             <p>
-                <Image
-                    src="logo.png"
-                    alt="Cleared Logo"
-                    width={180}
-                    height={37}
-                />
+                <Logo />
                 <br />
                 <br />
                 {APP_NAME} | {APP_DESC}

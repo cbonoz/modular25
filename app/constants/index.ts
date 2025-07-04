@@ -1,4 +1,5 @@
 import {
+    filecoin,
     filecoinCalibration
 } from '@wagmi/core/chains';
 
@@ -11,6 +12,7 @@ export const siteConfig = {
         secondary: 'Learn more'
     },
     logo: {
+        url : '/logo.png',
         width: 180,
         height: 37,
         alt: 'Cleared Logo'
@@ -22,7 +24,7 @@ export const APP_NAME = siteConfig.name;
 export const APP_DESC = siteConfig.description;
 
 // https://wagmi.sh/react/chains
-export const CHAIN_OPTIONS = [filecoinCalibration];
+export const CHAIN_OPTIONS = [filecoinCalibration, filecoin];
 
 export const CHAIN_MAP = CHAIN_OPTIONS.reduce((acc, chain) => {
     acc[chain.id] = chain;

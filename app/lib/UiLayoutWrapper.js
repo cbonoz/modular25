@@ -11,21 +11,24 @@ import Image from 'next/image';
 import ConnectButton from './ConnectButton';
 import { Theme } from '@ant-design/cssinjs';
 
+
+const isUploadUrl = (pathname) => {
+    return pathname?.startsWith('/upload');
+};
+
 function UiLayoutWrapper({ children }) {
     const pathname = usePathname();
+    let menuItems = [];
+    if (!isUploadUrl(pathname)) {
+        menuItems = [
+            {
+                key: '/create',
+                label: <Link href="/create">Create Policy</Link>,
+                href: '/create',
+            }
+        ];
+    }
 
-    const menuItems = [
-        {
-            key: '/create',
-            label: <Link href="/create">Create Policy</Link>,
-            href: '/create',
-        },
-        {
-            key: '/about',
-            label: <Link href="/about">About</Link>,
-            href: '/about',
-        },
-    ];
     return (
         <StyledComponentsRegistry>
             <ConfigProvider
@@ -78,8 +81,11 @@ function UiLayoutWrapper({ children }) {
                             {/* {wallet?.address && <span>{abbreviate(wallet?.address)}&nbsp;(<a href="#" onClick={logout}>logout</a>)</span>} */}
                         </span>
                     </Header>
-                    <span className="float-right bold active-network">
-                        Active network: {ACTIVE_CHAIN.name}&nbsp;
+                    <span 
+                        className="float-right bold active-network"
+                        style={{ color: '#8c8c8c' }}
+                    >
+                        Use network: {ACTIVE_CHAIN.name}&nbsp;
                     </span>
                     <Content className="container">
                         {/* Pass children to the content area */}
