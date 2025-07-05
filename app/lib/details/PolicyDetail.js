@@ -384,6 +384,11 @@ const PolicyDetail = ({ uploadId }) => {
 				reason
 			});
 			await loadAllClaims(); // Refresh claims
+
+			// Refresh contract balance after claim approval (when funds are disbursed)
+			if (status === 1) {
+				await loadUSDFCData();
+			}
 		} catch (e) {
 			setError(humanError(e));
 		} finally {
