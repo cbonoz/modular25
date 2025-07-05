@@ -33,10 +33,17 @@ const EmployeeClaimForm = ({
     const [shouldUpload, setShouldUpload] = useState(true);
     const [passcode, setPasscode] = useState('');
     const [contractHasPasscode, setContractHasPasscode] = useState(false);
+    const [amountError, setAmountError] = useState('');
     
     // AI evaluation state
     const [aiEvaluation, setAiEvaluation] = useState(null);
     const [aiEvaluating, setAiEvaluating] = useState(false);
+
+    // Check if policy is active and has sufficient balance
+    const isPolicyActive = data?.policyParams?.isActive;
+    const contractBalance = parseFloat(ethers.utils.formatUnits(contractUSDFCBalance || '0', 18));
+    const hasBalance = contractBalance > 0;
+    const canSubmitClaims = isPolicyActive && hasBalance;
 
     // Check contract passcode status on mount
     useEffect(() => {
@@ -74,11 +81,50 @@ const EmployeeClaimForm = ({
         }
     };
 
+    // Handle amount input change with validation
+    const handleAmountChange = (e) => {
+        const value = e.target.value;
+        setClaimAmount(value);
+        
+        // Clear previous error
+        setAmountError('');
+        
+        // Validate if value is not empty
+        if (value.trim()) {
+            const numericAmount = parseFloat(value);
+            const maxAmount = parseFloat(data?.policyParams?.maxAmount || '0');
+            
+            console.log('Validating amount:', numericAmount, 'against max:', maxAmount);
+            
+            if (isNaN(numericAmount)) {
+                setAmountError('Please enter a valid number');
+            } else if (numericAmount <= 0) {
+                setAmountError('Amount must be greater than 0');
+            } else if (maxAmount > 0 && numericAmount > maxAmount) {
+                setAmountError(`Amount cannot exceed $${maxAmount}`);
+            }
+        }
+    };
+
     // Handle form submission
     const handleSubmit = () => {
+        // Validate amount is a valid number
+        const numericAmount = parseFloat(claimAmount);
+        const maxAmount = parseFloat(data?.policyParams?.maxAmount || '0');
+        
+        if (isNaN(numericAmount) || numericAmount <= 0) {
+            setAmountError('Please enter a valid amount greater than 0');
+            return;
+        }
+
+        if (maxAmount > 0 && numericAmount > maxAmount) {
+            setAmountError(`Amount cannot exceed $${maxAmount}`);
+            return;
+        }
+
         if (onSubmitClaim) {
             onSubmitClaim({
-                amount: claimAmount,
+                amount: numericAmount.toString(), // Ensure it's a string representation of a valid number
                 description: claimDescription,
                 files,
                 shouldUpload,
@@ -91,6 +137,7 @@ const EmployeeClaimForm = ({
             setFiles([]);
             setPasscode('');
             setAiEvaluation(null);
+            setAmountError('');
         }
     };
 
@@ -145,12 +192,17 @@ const EmployeeClaimForm = ({
                 type="number"
                 placeholder="Enter amount"
                 value={claimAmount}
-                onChange={(e) => setClaimAmount(e.target.value)}
+                onChange={handleAmountChange}
                 max={data?.policyParams?.maxAmount}
                 disabled={!data?.policyParams?.isActive}
             />
+            {amountError && (
+                <p style={{ color: '#ff4d4f', fontSize: '12px', marginTop: '4px' }}>
+                    {amountError}
+                </p>
+            )}
             <p style={{ fontSize: '12px', color: '#666' }}>
-                Maximum allowed: ${data?.policyParams?.maxAmount}
+                Maximum allowed: ${parseFloat(data?.policyParams?.maxAmount || '0') || 'Not set'}
             </p>
             <br />
 
@@ -307,7 +359,8 @@ const EmployeeClaimForm = ({
                     !claimDescription || 
                     isEmpty(files) || 
                     !data?.policyParams?.isActive ||
-                    (contractHasPasscode && !passcode)
+                    (contractHasPasscode && !passcode) ||
+                    !!amountError // Disable if there's an amount error
                 }
             >
                 {data?.policyParams?.isActive ? 'Submit Claim' : 'Policy Inactive'}

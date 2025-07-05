@@ -23,14 +23,16 @@ import {
     isEmpty,
 } from '../../util';
 import { ACTIVE_CHAIN, CHAIN_MAP, MAX_FILE_SIZE_BYTES } from '../../constants';
+// Import mainnet chain for comparison
+import { filecoin } from '@wagmi/core/chains';
 import RenderObject from '../RenderObject';
 
 // Import modular components
 import EmployeeClaimForm from './EmployeeClaimForm';
 import PolicyInfoCard from './PolicyInfoCard';
-import OwnerFundingCard from './OwnerFundingCard';
 import ClaimsList from './ClaimsList';
 import ResultCard from './ResultCard';
+import PolicyManagementCard from './PolicyManagementCard';
 import { getStatusColor, getStatusText, RESULT_MESSAGES } from '../../constants/PolicyConstants';
 
 import {
@@ -83,6 +85,9 @@ const PolicyDetail = ({ uploadId }) => {
     const [withdrawAmount, setWithdrawAmount] = useState('');
     const [fundingInfo, setFundingInfo] = useState({ totalFunded: '0', totalReimbursed: '0', remainingBalance: '0' });
     const [usdcLoading, setUsdcLoading] = useState(false);
+
+    // Upload status state
+    const [uploadStatus, setUploadStatus] = useState(null); // { status: 'uploading', 'success', 'failed', data: ... }
 
     // Computed values
     const isOwner = data?.owner === address;
@@ -172,33 +177,133 @@ const PolicyDetail = ({ uploadId }) => {
                 throw new Error('Please upload a receipt');
             }
 
-            let cid = '';
+            const receiptHash = files[0].dataHash;
+            
+            // Determine if we're on mainnet (Filecoin) - non-blocking uploads
+            // or testnet (Filecoin Calibration) - blocking uploads
+            const isMainnet = chain?.id === filecoin.id;
+            const shouldBlock = shouldUpload && !isMainnet; // Block on testnet, non-blocking on mainnet
+            
+            let uploadPromise = null;
+            let finalCid = '';
+
             if (shouldUpload) {
-                cid = await uploadFilesWithSynapse(files, null, signer);
+                setUploadStatus({ 
+                    status: 'uploading', 
+                    fileName: files[0].name,
+                    fileSize: files[0].size 
+                });
+                
+                if (shouldBlock) {
+                    // BLOCKING: Wait for upload to complete before submitting claim (testnet)
+                    console.log('📤 Blocking upload on testnet - waiting for completion...');
+                    try {
+                        finalCid = await uploadFilesWithSynapse(files, null, signer);
+                        console.log('✓ Synapse upload completed:', finalCid);
+                        setUploadStatus({ 
+                            status: 'success', 
+                            cid: finalCid,
+                            fileName: files[0].name,
+                            fileSize: files[0].size,
+                            timestamp: new Date().toISOString()
+                        });
+                    } catch (error) {
+                        console.error('✗ Synapse upload failed:', error);
+                        setUploadStatus({ 
+                            status: 'failed', 
+                            error: error.message,
+                            fileName: files[0].name,
+                            fileSize: files[0].size,
+                            timestamp: new Date().toISOString()
+                        });
+                        
+                        // Check if this is a recoverable testnet issue
+                        const isRecoverableTestnetIssue = 
+                            error.isNetworkIssue || 
+                            error.isGasIssue || 
+                            error.message?.includes('testnet') ||
+                            error.message?.includes('500') ||
+                            error.message?.includes('exit=[33]');
+                            
+                        if (isRecoverableTestnetIssue) {
+                            console.log('⚠️ Detected recoverable testnet issue - allowing claim submission without upload');
+                            // Show warning but allow user to continue
+                            setUploadStatus(prev => ({ 
+                                ...prev, 
+                                allowProceed: true,
+                                warningMessage: 'Upload failed due to testnet issues. You can proceed with claim submission using the receipt hash only.'
+                            }));
+                            finalCid = ''; // No CID, will use receipt hash only
+                        } else {
+                            // For non-recoverable errors, still fail
+                            throw new Error(`Upload failed: ${error.message}`);
+                        }
+                    }
+                } else {
+                    // NON-BLOCKING: Start upload in background (mainnet)
+                    console.log('📤 Non-blocking upload on mainnet - submitting claim immediately...');
+                    uploadPromise = uploadFilesWithSynapse(files, null, signer)
+                        .then(cid => {
+                            console.log('✓ Synapse upload completed:', cid);
+                            setUploadStatus({ 
+                                status: 'success', 
+                                cid,
+                                fileName: files[0].name,
+                                fileSize: files[0].size,
+                                timestamp: new Date().toISOString()
+                            });
+                            return cid;
+                        })
+                        .catch(error => {
+                            console.error('✗ Synapse upload failed:', error);
+                            setUploadStatus({ 
+                                status: 'failed', 
+                                error: error.message,
+                                fileName: files[0].name,
+                                fileSize: files[0].size,
+                                timestamp: new Date().toISOString()
+                            });
+                            return ''; // Return empty CID on failure
+                        });
+                }
             }
 
-            const receiptHash = files[0].dataHash;
+            // Submit claim with appropriate CID
             const res = await submitClaim(
                 signer,
                 uploadId,
                 amount,
                 description,
                 receiptHash,
-                cid,
+                finalCid, // Will be populated if blocking upload, empty if non-blocking
                 passcode
             );
 
             console.log('submitted claim', res);
+            
+            // Show success message with upload status info
             setResult({
                 type: RESULT_MESSAGES.CLAIM_SUBMITTED,
                 message: 'Reimbursement claim submitted successfully!',
                 amount: amount,
                 description: description,
-                cid
+                uploadInProgress: shouldUpload && uploadPromise !== null,
+                uploadCompleted: shouldUpload && shouldBlock,
+                network: isMainnet ? 'mainnet' : 'testnet'
             });
 
             // Refresh claims
             await loadEmployeeClaims();
+
+            // If non-blocking upload was started, handle the result in background
+            if (uploadPromise) {
+                uploadPromise.then(cid => {
+                    if (cid) {
+                        console.log('Background upload completed for claim, CID:', cid);
+                    }
+                });
+            }
+
         } catch (e) {
             console.log('error submitting claim', e);
             setError(humanError(e));
@@ -258,13 +363,22 @@ const PolicyDetail = ({ uploadId }) => {
     }
 
     // Update policy status (owner only)
-    async function handleUpdatePolicyStatus(isActive) {
+    const handleUpdatePolicyStatus = async (newStatus) => {
+        if (!signer || !uploadId) {
+            setError('Wallet not connected');
+            return;
+        }
+
         setRpcPending();
         try {
-            await updatePolicyStatus(signer, uploadId, isActive);
+            // Call the contract's updatePolicyStatus function
+            const contract = new ethers.Contract(uploadId, [
+                "function updatePolicyStatus(bool) public"
+            ], signer);
+            const tx = await contract.updatePolicyStatus(newStatus);
             setResult({
                 type: RESULT_MESSAGES.POLICY_STATUS_UPDATED,
-                status: isActive ? 'Activated' : 'Deactivated'
+                status: newStatus ? 'Activated' : 'Deactivated'
             });
             await getData(); // Refresh policy data
         } catch (e) {
@@ -451,6 +565,8 @@ const PolicyDetail = ({ uploadId }) => {
             children: (
                 <div>
                     <h4>Policy Funding Management</h4>
+                    
+                    {/* Funding Management Section */}
                     <Card>
                         <Row gutter={16}>
                             <Col span={12}>
@@ -540,6 +656,14 @@ const PolicyDetail = ({ uploadId }) => {
                             </Row>
                         </div>
                     </Card>
+
+                    {/* Add policy management card */}
+
+                    <PolicyManagementCard
+                        isActive={data?.policyParams?.isActive}
+                        onUpdatePolicyStatus={handleUpdatePolicyStatus}
+                        rpcLoading={rpcLoading}
+                    />
                 </div>
             ),
         }
@@ -806,7 +930,14 @@ const PolicyDetail = ({ uploadId }) => {
 
                             {result && (
                                 <div style={{ marginTop: '16px' }}>
-                                    <ResultCard result={result} />
+                                    <ResultCard result={result} uploadStatus={uploadStatus} />
+                                </div>
+                            )}
+
+                            {/* Show upload status even when there's no result yet */}
+                            {!result && uploadStatus && (
+                                <div style={{ marginTop: '16px' }}>
+                                    <ResultCard uploadStatus={uploadStatus} />
                                 </div>
                             )}
 

@@ -47,6 +47,9 @@ export async function deployContract(
         // Hash the passcode if provided
         const passcodeHash = hashPasscode(passcode);
 
+        // Convert maxAmount to Wei units to match how claims are submitted
+        const maxAmountInWei = ethers.utils.parseUnits(maxAmount.toString(), 18);
+
         console.log(
             'Deploying reimbursement policy contract...',
             policyName,
@@ -55,6 +58,7 @@ export async function deployContract(
             location,
             employeeCount,
             maxAmount,
+            'maxAmountInWei:', maxAmountInWei.toString(),
             category,
             'USDFC Address:',
             USDFC_TOKEN_ADDRESS,
@@ -68,7 +72,7 @@ export async function deployContract(
             businessType,
             location,
             employeeCount,
-            parseInt(maxAmount), // Convert to integer instead of using parseUnits
+            maxAmountInWei, // Use Wei units to match claim submission format
             category,
             USDFC_TOKEN_ADDRESS, // Add USDFC token address as the last parameter
             passcodeHash
@@ -87,6 +91,11 @@ export const getMetadata = async (signer, address) => {
     const contract = new ethers.Contract(address, CLEARED_CONTRACT.abi, signer);
     const result = await contract.getPolicyMetadata();
     console.log('policy metadata result', result);
+    console.log('raw maxAmount from contract:', result[2].maxAmount.toString());
+    
+    const formattedMaxAmount = ethers.utils.formatUnits(result[2].maxAmount, 18);
+    console.log('formatted maxAmount:', formattedMaxAmount);
+    
     return {
         name: result[0],
         description: result[1],
@@ -94,7 +103,7 @@ export const getMetadata = async (signer, address) => {
             businessType: result[2].businessType,
             location: result[2].location,
             employeeCount: result[2].employeeCount,
-            maxAmount: result[2].maxAmount.toNumber(),
+            maxAmount: formattedMaxAmount, // Keep as string to preserve precision
             category: result[2].category,
             isActive: result[2].isActive
         },
@@ -105,30 +114,32 @@ export const getMetadata = async (signer, address) => {
 };
 
 // Submit a claim - employee only
-export const submitClaim = async (signer, contractAddress, receiptImageUrl, amount, description) => {
+export const submitClaim = async (signer, contractAddress, amount, description, receiptHash, receiptCid, passcode) => {
     try {
         const contract = new ethers.Contract(contractAddress, CLEARED_CONTRACT.abi, signer);
         
         console.log('Submitting claim:', {
-            receiptImageUrl,
             amount,
-            description
+            description,
+            receiptHash,
+            receiptCid,
+            passcode: passcode ? 'provided' : 'not provided'
         });
         
-        // Validate receipt using AI service
-        const validationResult = await validateReceipt(receiptImageUrl, description, amount);
-        
-        if (!validationResult.isValid) {
-            throw new Error(`Receipt validation failed: ${validationResult.reason}`);
+        // Validate that amount is a valid number
+        const numericAmount = parseFloat(amount);
+        if (isNaN(numericAmount) || numericAmount <= 0) {
+            throw new Error(`Invalid amount: "${amount}". Amount must be a valid number greater than 0.`);
         }
         
         // Convert amount to proper units (assuming 18 decimals)
-        const amountInWei = ethers.utils.parseUnits(amount.toString(), 18);
+        const amountInWei = ethers.utils.parseUnits(numericAmount.toString(), 18);
         
-        // Submit the claim to the contract
+        // Submit the claim to the contract with correct parameter order
+        // Contract expects: _amount, _description, _receiptHash, _receiptCid, _passcode (as string, not hash)
         return await executeContractTransactionWithRetry(
             contract.submitClaim,
-            [receiptImageUrl, amountInWei, description],
+            [amountInWei, description, receiptHash, receiptCid || '', passcode || ''],
             'submit claim'
         );
         
@@ -195,7 +206,7 @@ export const getClaim = async (signer, address, claimId) => {
     return {
         employee: result.employee,
         receiptHash: result.receiptHash,
-        amount: result.amount.toNumber(),
+        amount: parseFloat(ethers.utils.formatUnits(result.amount, 18)), // Convert from wei to USD dollars for consistency
         category: result.category,
         description: result.description,
         timestamp: formatDate(result.timestamp.toNumber() * 1000),

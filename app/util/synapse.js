@@ -9,114 +9,73 @@ import { ethers } from 'ethers';
  * @param {Object} signer - Ethers signer from wallet (MetaMask)
  * @returns {Promise<string>} - Returns the CID of the uploaded content
  */
-export async function uploadFilesWithSynapse(files, metadata, signer) {
-  try {
-    console.log('Starting Synapse file upload with MetaMask...');
-    
-    // Create Web3Provider from window.ethereum (ethers v5)
-    const provider = new ethers.providers.Web3Provider(window.ethereum);
-    
-    // Initialize Synapse SDK with the browser provider
-    const synapse = await Synapse.create({
-      provider: provider,
-      rpcURL: RPC_URLS.calibration.websocket, // Use calibration testnet
-      withCDN: true
-    });
-
-    console.log('✓ Synapse SDK initialized with MetaMask');
-
-    // Create storage service with enhanced callbacks
-    const storage = await synapse.createStorage({
-      callbacks: {
-        onProviderSelected: (provider) => {
-          console.log(`✓ Selected storage provider: ${provider.owner}`);
-          console.log(`  PDP URL: ${provider.pdpUrl}`);
-        },
-        onProofSetResolved: (info) => {
-          if (info.isExisting) {
-            console.log(`✓ Using existing proof set: ${info.proofSetId}`);
-          } else {
-            console.log(`✓ Created new proof set: ${info.proofSetId}`);
-          }
-        },
-        onProofSetCreationStarted: (transaction, statusUrl) => {
-          console.log(`  Creating proof set, tx: ${transaction.hash}`);
-          console.log(`  Status URL: ${statusUrl}`);
-        },
-        onProofSetCreationProgress: (progress) => {
-          if (progress.transactionMined && !progress.proofSetLive) {
-            console.log('  Transaction mined, waiting for proof set to be live...');
-          }
-        },
-      },
-    });
-
-    console.log('✓ Storage service created');
-
-    // Prepare files for upload
-    const filesToUpload = [...files];
-    
-    // Add metadata file if provided
-    if (metadata) {
-      const blob = new Blob([JSON.stringify(metadata)], { type: 'application/json' });
-      const metaFile = new File([blob], 'metadata.json');
-      filesToUpload.push(metaFile);
+export async function uploadFilesWithSynapse(files, metadata = null, signer = null) {
+    if (!files || files.length === 0) {
+        throw new Error('No files provided for upload');
     }
 
-    // For now, we'll upload the first file (receipt)
-    // TODO: Handle multiple files or create a bundle
-    const fileToUpload = filesToUpload[0];
-    const fileData = await fileToUpload.arrayBuffer();
+    try {
+        console.log('🔄 Starting Synapse upload for files:', files.map(f => f.name));
+        
+        // Initialize Synapse SDK
+        const synapse = new Synapse({ wallet: signer });
+        await synapse.init();
+        console.log('✓ Synapse SDK initialized with MetaMask');
 
-    console.log(`Uploading file: ${fileToUpload.name}, size: ${fileData.byteLength} bytes`);
+        // Select storage provider
+        const storageProvider = await synapse.selectStorageProvider();
+        console.log('✓ Selected storage provider:', storageProvider.address);
+        console.log('  PDP URL:', storageProvider.pdpUrl);
 
-    // Run preflight checks
-    const preflight = await storage.preflightUpload(fileData.byteLength);
-    
-    console.log('Preflight check results:');
-    console.log('- Estimated cost:', preflight.estimatedCost);
-    console.log('- Allowance sufficient:', preflight.allowanceCheck.sufficient);
-
-    if (!preflight.allowanceCheck.sufficient) {
-      throw new Error(
-        `Insufficient allowance for upload. ` +
-        `Required: ${preflight.estimatedCost} USDFC. ` +
-        `Please increase your allowance via the FilCDN web app at https://fs-upload-dapp.netlify.app/`
-      );
-    }
-
-    console.log('✓ Preflight checks passed');
-
-    // Upload the file with progress callbacks
-    const uploadResult = await storage.upload(fileData, {
-      onUploadComplete: (commp) => {
-        console.log(`✓ Upload complete! CommP: ${commp}`);
-      },
-      onRootAdded: (transaction) => {
-        if (transaction) {
-          console.log(`✓ Transaction confirmed: ${transaction.hash}`);
-          console.log(`  Block number: ${transaction.blockNumber}`);
+        // Create storage for files
+        const uploadResults = await synapse.createStorage(files, metadata);
+        
+        if (!uploadResults || !uploadResults.cid) {
+            throw new Error('No CID returned from Synapse upload');
         }
-      }
-    });
-    
-    const cid = uploadResult.commp;
-    console.log(`✓ File uploaded successfully with CID: ${cid}`);
-    
-    return cid;
 
-  } catch (error) {
-    console.error('Error uploading file with Synapse SDK:', error);
-    
-    // Provide more specific error messages
-    if (error.message.includes('allowance')) {
-      throw new Error(`Upload failed: ${error.message}`);
-    } else if (error.message.includes('MetaMask')) {
-      throw new Error('MetaMask connection required. Please connect your wallet and try again.');
-    } else {
-      throw new Error(`Upload failed: ${error.message}`);
+        console.log('✓ Synapse upload completed successfully');
+        console.log('  CID:', uploadResults.cid);
+        console.log('  Deal ID:', uploadResults.dealId);
+        console.log('  Files uploaded:', files.length);
+
+        return uploadResults.cid;
+
+    } catch (error) {
+        console.error('Error uploading file with Synapse SDK:', error);
+        
+        // Classify the error to help with recovery decisions
+        const errorMessage = error.message || '';
+        const isNetworkError = errorMessage.includes('500') || 
+                              errorMessage.includes('502') || 
+                              errorMessage.includes('503') || 
+                              errorMessage.includes('timeout') ||
+                              errorMessage.includes('network');
+        
+        const isGasError = errorMessage.includes('gas') || 
+                          errorMessage.includes('exit=[33]') ||
+                          errorMessage.includes('failed to estimate gas') ||
+                          errorMessage.includes('insufficient funds');
+                          
+        const isTestnetError = errorMessage.includes('testnet') ||
+                              errorMessage.includes('Calibration') ||
+                              errorMessage.includes('proof set');
+
+        // Create enhanced error with classification
+        const enhancedError = new Error(`Synapse createStorage failed: ${errorMessage}`);
+        enhancedError.originalError = error;
+        enhancedError.isNetworkIssue = isNetworkError;
+        enhancedError.isGasIssue = isGasError;
+        enhancedError.isTestnetIssue = isTestnetError;
+        
+        console.log('Error classification:', {
+            isNetworkIssue: isNetworkError,
+            isGasIssue: isGasError,
+            isTestnetIssue: isTestnetError
+        });
+        
+        throw enhancedError;
     }
-  }
 }
 
 /**

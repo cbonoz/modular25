@@ -1,11 +1,12 @@
 'use client';
 
 import React from 'react';
-import { Card, Button } from 'antd';
+import { Card } from 'antd';
+import { ethers } from 'ethers';
 import { getExplorerUrl } from '../../util';
 import { ACTIVE_CHAIN } from '../../constants';
 
-const PolicyInfoCard = ({ data, isOwner, onUpdatePolicyStatus }) => {
+const PolicyInfoCard = ({ data, isOwner }) => {
     return (
         <div>
             <h4>Policy Information</h4>
@@ -22,7 +23,7 @@ const PolicyInfoCard = ({ data, isOwner, onUpdatePolicyStatus }) => {
                     </>
                 )}
 
-                <p><strong>Max Amount:</strong> ${data?.policyParams?.maxAmount}</p>
+                <p><strong>Max Amount:</strong> ${data?.policyParams?.maxAmount ? ethers.utils.formatUnits(data.policyParams.maxAmount, 18) : '0'}</p>
                 <p><strong>Category:</strong> {data?.policyParams?.category}</p>
                 <p><strong>Status:</strong>
                     <span style={{
@@ -31,28 +32,6 @@ const PolicyInfoCard = ({ data, isOwner, onUpdatePolicyStatus }) => {
                     }}>
                         {data?.policyParams?.isActive ? ' Active' : ' Inactive'}
                     </span>
-                    {isOwner && (
-                        <Button
-                            size="small"
-                            type={data?.policyParams?.isActive ? 'default' : 'primary'}
-                            style={{ marginLeft: '10px' }}
-                            onClick={() => {
-                                const action = data?.policyParams?.isActive ? 'deactivate' : 'activate';
-                                const confirmed = window.confirm(
-                                    `Are you sure you want to ${action} this policy? ${
-                                        data?.policyParams?.isActive
-                                            ? 'This will prevent new claims from being submitted.'
-                                            : 'This will allow employees to submit claims again.'
-                                    }`
-                                );
-                                if (confirmed) {
-                                    onUpdatePolicyStatus(!data?.policyParams?.isActive);
-                                }
-                            }}
-                        >
-                            {data?.policyParams?.isActive ? 'Deactivate' : 'Activate'}
-                        </Button>
-                    )}
                 </p>
 
                 {/* Show additional owner info only to owners */}
