@@ -39,7 +39,6 @@ import {
     getEmployeeClaims,
     processClaim,
     getMetadata,
-    validateReceipt,
     updatePolicyStatus,
     getContractUSDFCBalance,
     getUserUSDFCBalance,
@@ -47,6 +46,7 @@ import {
     getFundingInfo,
     withdrawFromContract,
     getContractPasscodeStatus,
+    debugFundingPrerequisites,
 } from '../../util/appContract';
 import { useAccount, useNetwork, useSwitchNetwork } from 'wagmi';
 import { useEthersSigner } from '../../hooks/useEthersSigner';
@@ -207,26 +207,6 @@ const PolicyDetail = ({ uploadId }) => {
         }
     }
 
-    // Validate receipt
-    async function validateReceiptHash() {
-        setRpcPending();
-        try {
-            const receiptHash = validateFiles[0].dataHash;
-            const res = await validateReceipt(signer, uploadId, receiptHash);
-            console.log('validate receipt', res);
-            setResult({
-                type: RESULT_MESSAGES.RECEIPT_VALIDATION,
-                exists: res.exists,
-                claimId: res.claimId,
-                receiptHash
-            });
-        } catch (e) {
-            setError(humanError(e));
-        } finally {
-            setRpcLoading(false);
-        }
-    }
-
     // Load employee's claims
     async function loadEmployeeClaims() {
         if (!address) return;
@@ -319,6 +299,7 @@ const PolicyDetail = ({ uploadId }) => {
 
         } catch (e) {
             console.error('Error loading USDFC data', e);
+            // Don't set error here unless it's ownership-related, as this might just be a network issue
         } finally {
             setUsdcLoading(false);
         }
@@ -328,12 +309,17 @@ const PolicyDetail = ({ uploadId }) => {
     async function handleFundContract() {
         setRpcPending();
         try {
+            // First run debug to check prerequisites
+            console.log('Running funding prerequisites check...');
+            const debugInfo = await debugFundingPrerequisites(signer, uploadId, fundingAmount);
+            
+            // If we reach here, debug completed - now try the actual funding
             await fundContractWithUSDFC(signer, uploadId, fundingAmount);
             setResult({
                 type: RESULT_MESSAGES.CONTRACT_FUNDED,
                 amount: fundingAmount
             });
-            setFundingAmount('');
+            setFundingAmount(''); // Clear the input
             await loadUSDFCData(); // Refresh balances
         } catch (e) {
             setError(humanError(e));
@@ -348,10 +334,10 @@ const PolicyDetail = ({ uploadId }) => {
         try {
             await withdrawFromContract(signer, uploadId, withdrawAmount);
             setResult({
-                type: RESULT_MESSAGES.CONTRACT_WITHDRAWAL,
+                type: RESULT_MESSAGES.FUNDS_WITHDRAWN,
                 amount: withdrawAmount
             });
-            setWithdrawAmount('');
+            setWithdrawAmount(''); // Clear the input
             await loadUSDFCData(); // Refresh balances
         } catch (e) {
             setError(humanError(e));

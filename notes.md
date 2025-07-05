@@ -8,10 +8,12 @@ Cleared
  
 Self-governing reimbursements cleared on-chain with AI and human review.
  
-Demo url (deployed on filecoin calibration): https://clearedapp.vercel.app/
+Live demo app (deployed on filecoin calibration): https://clearedapp.vercel.app/
  
-Video: 
- 
+Demo Video: 
+
+Example reimbursement policy:  http://localhost:3000/upload/0xD3334e138258b53Dd84c727FD8e66b1Edaa8Ce77
+
 Built for the DevSpot PL_Genesis hackathon 2025.
  
 ## Motivation

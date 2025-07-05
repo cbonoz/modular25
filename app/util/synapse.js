@@ -13,8 +13,8 @@ export async function uploadFilesWithSynapse(files, metadata, signer) {
   try {
     console.log('Starting Synapse file upload with MetaMask...');
     
-    // Create BrowserProvider from the signer's provider
-    const provider = new ethers.BrowserProvider(window.ethereum);
+    // Create Web3Provider from window.ethereum (ethers v5)
+    const provider = new ethers.providers.Web3Provider(window.ethereum);
     
     // Initialize Synapse SDK with the browser provider
     const synapse = await Synapse.create({
@@ -129,8 +129,8 @@ export async function downloadFileWithSynapse(cid, signer) {
   try {
     console.log(`Starting download for CID: ${cid}`);
     
-    // Create BrowserProvider from the signer's provider
-    const provider = new ethers.BrowserProvider(window.ethereum);
+    // Create Web3Provider from window.ethereum (ethers v5)
+    const provider = new ethers.providers.Web3Provider(window.ethereum);
     
     const synapse = await Synapse.create({
       provider: provider,
@@ -172,7 +172,7 @@ export async function setupSynapsePayments(signer, depositAmount = "100") {
   try {
     console.log('Setting up Synapse payments...');
     
-    const provider = new ethers.BrowserProvider(window.ethereum);
+    const provider = new ethers.providers.Web3Provider(window.ethereum);
     const synapse = await Synapse.create({
       provider: provider,
       rpcURL: RPC_URLS.calibration.websocket
@@ -180,9 +180,9 @@ export async function setupSynapsePayments(signer, depositAmount = "100") {
 
     // Import required constants
     const { TOKENS, CONTRACT_ADDRESSES } = await import('@filoz/synapse-sdk');
-    
+
     // 1. Deposit USDFC tokens (one-time setup)
-    const amount = ethers.parseUnits(depositAmount, 18);
+    const amount = ethers.utils.parseUnits(depositAmount, 18); // Fixed: use ethers.utils.parseUnits for v5
     console.log(`Depositing ${depositAmount} USDFC...`);
     
     const depositTx = await synapse.payments.deposit(amount, TOKENS.USDFC, {
@@ -209,8 +209,8 @@ export async function setupSynapsePayments(signer, depositAmount = "100") {
     
     await synapse.payments.approveService(
       pandoraAddress,
-      ethers.parseUnits('10', 18), // Rate allowance: 10 USDFC per epoch
-      ethers.parseUnits('1000', 18) // Lockup allowance: 1000 USDFC total
+      ethers.utils.parseUnits('10', 18), // Fixed: use ethers.utils.parseUnits for v5
+      ethers.utils.parseUnits('1000', 18) // Fixed: use ethers.utils.parseUnits for v5
     );
 
     console.log('✓ Synapse payments setup complete');
