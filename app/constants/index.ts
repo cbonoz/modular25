@@ -31,19 +31,21 @@ export const CHAIN_MAP = CHAIN_OPTIONS.reduce((acc, chain) => {
     return acc;
 }, {});
 
-export const ACTIVE_CHAIN = CHAIN_OPTIONS[0]; // scrollSepolia;
-
-export const EXAMPLE_ITEM = {
-
-};
+// Use environment variable to determine active chain
+// In production (NEXT_PUBLIC_NETWORK=mainnet), use filecoin mainnet
+// In development, use filecoinCalibration testnet
+const isProduction = process.env.NEXT_PUBLIC_NETWORK === 'mainnet';
+export const ACTIVE_CHAIN = isProduction ? filecoin : filecoinCalibration;
 
 export const IPFS_BASE_URL = 'https://ipfs.io/ipfs';
 
 export const MAX_FILE_SIZE_BYTES = 5000000; // 5MB
 
-// USDFC token address on Filecoin Calibration testnet
-// Using a placeholder for now - replace with actual USDFC token address when available
-export const USDFC_TOKEN_ADDRESS = '0x0000000000000000000000000000000000000001'; // TODO: Replace with actual USDFC address
+// https://docs.secured.finance/usdfc-stablecoin/deployed-contracts
+// USDFC token address - different for mainnet vs testnet
+export const USDFC_TOKEN_ADDRESS = isProduction 
+    ? '0x80B98d3aa09ffff255c3ba4A241111Ff1262F045'
+    : '0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0';
 
 // US States for location dropdown
 export const US_STATES = [

@@ -9,11 +9,7 @@ import {
     Steps,
     Result,
     Divider,
-    Checkbox,
     Card,
-    Tooltip,
-    Select,
-    Switch,
     Spin,
 } from 'antd';
 import {
@@ -22,23 +18,18 @@ import {
     getExplorerUrl,
     humanError,
     isEmpty,
-    bytesToSize,
 } from '../../util';
 import { uploadFiles } from '../../util/stor';
-import TextArea from 'antd/lib/input/TextArea';
 import {
-    EXAMPLE_ITEM,
     ACTIVE_CHAIN,
     APP_NAME,
     CHAIN_MAP,
-    MAX_FILE_SIZE_BYTES,
 } from '../../constants';
 import { FileDrop } from '../FileDrop';
 import { deployContract } from '../../util/appContract';
 import { useAccount, useNetwork, useSwitchNetwork } from 'wagmi';
 import ConnectButton from '../ConnectButton';
 import { useEthersSigner } from '../../hooks/useEthersSigner';
-import { InfoCircleOutlined } from '@ant-design/icons';
 import PolicyFormFields from './PolicyFormFields';
 import Logo from '../Logo';
 
@@ -90,14 +81,13 @@ function CreatePolicy() {
     }, []);
 
     const setDemo = () => setData({
-        name: 'Remote Work Internet Reimbursement Policy',
+        name: 'Acme Co. Remote Work Internet Reimbursement Policy',
         description: 'Employees working from home are eligible for up to 50% reimbursement of monthly internet costs, with a maximum of $100 per month. Receipts must be submitted monthly with proof of internet service.',
         businessType: 'technology',
-        location: 'california',
+        location: 'California',
         employeeCount: '11-50',
         maxAmount: '100',
-        category: 'internet',
-        ...EXAMPLE_ITEM
+        category: 'Internet',
     });
 
     const updateData = (key, value) => {
@@ -179,7 +169,8 @@ function CreatePolicy() {
                 data.location,
                 data.employeeCount,
                 data.maxAmount,
-                data.category
+                data.category,
+                data.passcode || '' // Add passcode parameter
             );
 
             res['cid'] = cid;
@@ -316,9 +307,8 @@ function CreatePolicy() {
                                 <Divider />
 
                                 <PolicyFormFields
-                                    data={data}
-                                    updateData={updateData}
-                                    userUSDFCBalance="0"
+                                    onDataChange={setData}
+                                    initialData={data}
                                 />
 
                                 <br />

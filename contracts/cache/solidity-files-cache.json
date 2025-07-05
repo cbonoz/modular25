@@ -1,1 +1,59 @@
-{"_format":"","paths":{"artifacts":"out","build_infos":"out/build-info","sources":"contracts","tests":"test","scripts":"script","libraries":["lib"]},"files":{"contracts/ClearedContract.sol":{"lastModificationDate":1751403979778,"contentHash":"b912cb51658772bcaaec6e2b12a2aa0c","sourceName":"contracts/ClearedContract.sol","imports":[],"versionRequirement":"^0.8.19","artifacts":{"ClearedContract":{"0.8.23":{"default":{"path":"ClearedContract.sol/ClearedContract.json","build_id":"ad380716985092cdd975639eba60d240"}}},"IERC20":{"0.8.23":{"default":{"path":"ClearedContract.sol/IERC20.json","build_id":"ad380716985092cdd975639eba60d240"}}}},"seenByCompiler":true}},"builds":["ad380716985092cdd975639eba60d240"],"profiles":{"default":{"solc":{"optimizer":{"enabled":true,"runs":200},"metadata":{"useLiteralContent":false,"bytecodeHash":"ipfs","appendCBOR":true},"outputSelection":{"*":{"*":["abi","evm.bytecode.object","evm.bytecode.sourceMap","evm.bytecode.linkReferences","evm.deployedBytecode.object","evm.deployedBytecode.sourceMap","evm.deployedBytecode.linkReferences","evm.deployedBytecode.immutableReferences","evm.methodIdentifiers","metadata"]}},"evmVersion":"cancun","viaIR":false,"libraries":{}},"vyper":{"evmVersion":"cancun","outputSelection":{"*":{"*":["abi","evm.bytecode","evm.deployedBytecode"]}}}}}}
+{
+  "_format": "ethers-rs-sol-cache-3",
+  "paths": {
+    "artifacts": "out",
+    "build_infos": "out/build-info",
+    "sources": "contracts",
+    "tests": "test",
+    "scripts": "script",
+    "libraries": [
+      "lib"
+    ]
+  },
+  "files": {
+    "contracts/ClearedContract.sol": {
+      "lastModificationDate": 1751669782356,
+      "contentHash": "db3939d06692b4b075eb8e7ebcb8acb9",
+      "sourceName": "contracts/ClearedContract.sol",
+      "solcConfig": {
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "metadata": {
+            "useLiteralContent": false,
+            "bytecodeHash": "ipfs",
+            "appendCBOR": true
+          },
+          "outputSelection": {
+            "*": {
+              "": [
+                "ast"
+              ],
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ]
+            }
+          },
+          "evmVersion": "paris",
+          "libraries": {}
+        }
+      },
+      "imports": [],
+      "versionRequirement": "^0.8.19",
+      "artifacts": {
+        "ClearedContract": {
+          "0.8.22+commit.4fc1097e.Darwin.appleclang": "ClearedContract.sol/ClearedContract.json"
+        },
+        "IERC20": {
+          "0.8.22+commit.4fc1097e.Darwin.appleclang": "ClearedContract.sol/IERC20.json"
+        }
+      }
+    }
+  }
+}

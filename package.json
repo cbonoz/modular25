@@ -5,12 +5,14 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:prod": "NODE_ENV=production NEXT_PUBLIC_NETWORK=mainnet next build",
     "start": "next start",
     "lint": "next lint"
   },
   "dependencies": {
     "@ant-design/cssinjs": "^1.17.0",
     "@ant-design/icons": "^5.2.6",
+    "@filoz/synapse-sdk": "^0.18.0",
     "@wagmi/core": "^1.4.3",
     "antd": "^5.8.5",
     "axios": "^1.5.0",

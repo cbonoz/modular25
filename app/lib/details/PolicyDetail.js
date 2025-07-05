@@ -46,6 +46,7 @@ import {
     fundContractWithUSDFC,
     getFundingInfo,
     withdrawFromContract,
+    getContractPasscodeStatus,
 } from '../../util/appContract';
 import { useAccount, useNetwork, useSwitchNetwork } from 'wagmi';
 import { useEthersSigner } from '../../hooks/useEthersSigner';
@@ -53,23 +54,24 @@ import ConnectButton from '../ConnectButton';
 import { FileDrop } from '../FileDrop';
 import TextArea from 'antd/es/input/TextArea';
 import { InfoCircleOutlined } from '@ant-design/icons';
-import { uploadFiles } from '../../util/stor';
+import { uploadFilesWithSynapse } from '../../util/synapse';
 
 const PolicyDetail = ({ uploadId }) => {
+    // All hooks must be called at the top level, before any early returns
+    const { address, isConnected } = useAccount();
+    const { chain } = useNetwork();
+    const { switchNetwork, isLoading: isSwitching } = useSwitchNetwork();
+    const signer = useEthersSigner({ chainId: chain?.id || ACTIVE_CHAIN.id });
+
+    // All useState hooks
     const [pageLoading, setPageLoading] = useState(true);
     const [loading, setLoading] = useState(false);
     const [rpcLoading, setRpcLoading] = useState(false);
     const [walletLoading, setWalletLoading] = useState(true);
     const [result, setResult] = useState();
-    const [files, setFiles] = useState([]);
-    const [validateFiles, setValidateFiles] = useState([]);
     const [activeTab, setActiveTab] = useState('');
-    const [shouldUpload, setShouldUpload] = useState(true);
-    const [notes, setNotes] = useState('');
     const [error, setError] = useState();
     const [data, setData] = useState();
-    const [claimAmount, setClaimAmount] = useState('');
-    const [claimDescription, setClaimDescription] = useState('');
     const [employeeClaims, setEmployeeClaims] = useState([]);
     const [allClaims, setAllClaims] = useState([]);
     const [networkError, setNetworkError] = useState(false);
@@ -82,15 +84,10 @@ const PolicyDetail = ({ uploadId }) => {
     const [fundingInfo, setFundingInfo] = useState({ totalFunded: '0', totalReimbursed: '0', remainingBalance: '0' });
     const [usdcLoading, setUsdcLoading] = useState(false);
 
-    console.log('policy contract', uploadId);
-
-    const { address, isConnected } = useAccount();
-    const { chain } = useNetwork();
-    const { switchNetwork, isLoading: isSwitching } = useSwitchNetwork();
-    const signer = useEthersSigner({ chainId: chain?.id || ACTIVE_CHAIN.id });
-
+    // Computed values
     const isOwner = data?.owner === address;
 
+    // All useEffect hooks
     // Handle network changes and initial loading
     useEffect(() => {
         if (isConnected && chain) {
@@ -119,7 +116,34 @@ const PolicyDetail = ({ uploadId }) => {
         return () => clearTimeout(timeout);
     }, []);
 
-    const breadcrumbs = [
+    useEffect(() => {
+        const checkData = uploadId && signer;
+        if (checkData) {
+            getData();
+        }
+    }, [uploadId, signer, address]);
+
+    // Set default active tab when data loads or user role is determined
+    useEffect(() => {
+        if (data && address && activeTab === '') {
+            const defaultTab = (data.owner !== address) ? '1' : '4'; // Employee: Submit Claim, Owner: View Claims
+            console.log('Setting default tab:', defaultTab, 'isOwner:', data.owner === address, 'owner:', data.owner, 'address:', address);
+            setActiveTab(defaultTab);
+        }
+    }, [data, address, activeTab]);
+
+    // useMemo hooks
+    const cardTitle = useMemo(() => {
+        if (data) {
+            return `${isOwner ? 'Policy Management' : 'Employee Portal'}: ${data.name}`;
+        } else if (error) {
+            return 'Policy Not Found';
+        } else {
+            return 'Loading...';
+        }
+    }, [error, data, isOwner]);
+
+    const breadcrumbs = useMemo(() => [
         {
             title: 'Home',
             href: '/',
@@ -128,50 +152,50 @@ const PolicyDetail = ({ uploadId }) => {
             title: data?.name || 'Policy',
             href: `/upload/${uploadId}`,
         },
-    ];
+    ], [data?.name, uploadId]);
 
-    function setRpcPending() {
+    console.log('policy contract', uploadId);
+
+    const setRpcPending = () => {
         setError();
         setRpcLoading(true);
         setResult();
     }
 
-    // Submit reimbursement claim
-    async function submitReimbursementClaim() {
+    // Simplified claim submission handler - receives structured data from EmployeeClaimForm
+    async function handleClaimSubmission(claimData) {
         setRpcPending();
         try {
+            const { amount, description, files, shouldUpload, passcode } = claimData;
+            
             if (!files[0]) {
                 throw new Error('Please upload a receipt');
             }
 
             let cid = '';
             if (shouldUpload) {
-                cid = await uploadFiles(files);
+                cid = await uploadFilesWithSynapse(files, null, signer);
             }
 
             const receiptHash = files[0].dataHash;
             const res = await submitClaim(
                 signer,
                 uploadId,
-                claimAmount,
-                claimDescription,
+                amount,
+                description,
                 receiptHash,
-                cid
+                cid,
+                passcode
             );
 
             console.log('submitted claim', res);
             setResult({
                 type: RESULT_MESSAGES.CLAIM_SUBMITTED,
                 message: 'Reimbursement claim submitted successfully!',
-                amount: claimAmount,
-                description: claimDescription,
+                amount: amount,
+                description: description,
                 cid
             });
-
-            // Clear form
-            setClaimAmount('');
-            setClaimDescription('');
-            setFiles([]);
 
             // Refresh claims
             await loadEmployeeClaims();
@@ -363,23 +387,7 @@ const PolicyDetail = ({ uploadId }) => {
         }
     }
 
-    useEffect(() => {
-        const checkData = uploadId && signer;
-        if (checkData) {
-            getData();
-        }
-    }, [uploadId, signer, address]);
-
-    const cardTitle = useMemo(() => {
-        if (data) {
-            return `${isOwner ? 'Policy Management' : 'Employee Portal'}: ${data.name}`;
-        } else if (error) {
-            return 'Policy Not Found';
-        } else {
-            return 'Loading...';
-        }
-    }, [error, data, isOwner]);
-
+    // Early returns after all hooks are called
     if (walletLoading) {
         return (
             <Card title="Loading Policy Portal">
@@ -408,30 +416,23 @@ const PolicyDetail = ({ uploadId }) => {
         );
     }
 
-    // Employee tab - Submit reimbursement claim
+    // Tab configuration
     const employeeTab = {
         key: '1',
         label: 'Submit Claim',
         children: (
             <EmployeeClaimForm
                 data={data}
-                claimAmount={claimAmount}
-                setClaimAmount={setClaimAmount}
-                claimDescription={claimDescription}
-                setClaimDescription={setClaimDescription}
-                files={files}
-                setFiles={setFiles}
-                shouldUpload={shouldUpload}
-                setShouldUpload={setShouldUpload}
                 contractUSDFCBalance={contractUSDFCBalance}
                 usdcLoading={usdcLoading}
                 rpcLoading={rpcLoading}
-                onSubmitClaim={submitReimbursementClaim}
+                onSubmitClaim={handleClaimSubmission}
+                signer={signer}
+                contractAddress={uploadId}
             />
         ),
     };
 
-    // Claims history tab
     const claimsHistoryTab = {
         key: '3',
         label: `My Claims (${employeeClaims.length})`,
@@ -445,7 +446,6 @@ const PolicyDetail = ({ uploadId }) => {
         ),
     };
 
-    // Owner management tabs
     const ownerTabs = [
         {
             key: '4',
@@ -560,21 +560,12 @@ const PolicyDetail = ({ uploadId }) => {
     ];
 
     const tabItems = [];
-
     if (!isOwner) {
         tabItems.push(employeeTab);
         tabItems.push(claimsHistoryTab);
     } else {
         tabItems.push(...ownerTabs);
     }
-
-    // Set default active tab when data loads or user role is determined
-    useEffect(() => {
-        if (data && activeTab === '') {
-            const defaultTab = !isOwner ? '1' : '4'; // Employee: Submit Claim, Owner: View Claims
-            setActiveTab(defaultTab);
-        }
-    }, [data, isOwner, activeTab]);
 
     return (
         <div style={{ minHeight: '100vh', background: '#f5f5f5' }}>
@@ -739,18 +730,18 @@ const PolicyDetail = ({ uploadId }) => {
                                                             // Check if balance is zero for both owners and employees
                                                             const balance = parseFloat(ethers.utils.formatUnits(contractUSDFCBalance || '0', 18));
                                                             const isBalanceZero = balance === 0;
-                                                            const isActive = data?.policyParams?.isActive && !isBalanceZero;
+                                                            const isActive = data?.policyParams?.isActive;
                                                             
                                                             return (
                                                                 <>
-                                                                    <span>{isActive ? '✅ Active' : '❌ Inactive'}</span>
-                                                                    {!isActive && isBalanceZero && (
+                                                                    <span>{(isActive && !isBalanceZero) ? '✅ Active' : '❌ Inactive'}</span>
+                                                                    {isActive && isBalanceZero && (
                                                                         <div style={{ 
                                                                             fontSize: '12px', 
                                                                             color: 'rgba(255,255,255,0.7)',
                                                                             fontWeight: 'normal'
                                                                         }}>
-                                                                            (Needs funding)
+                                                                            Needs funding
                                                                         </div>
                                                                     )}
                                                                 </>

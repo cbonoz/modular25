@@ -3,6 +3,14 @@ import { CLEARED_CONTRACT } from './metadata';
 import { formatDate } from '.';
 import { USDFC_TOKEN_ADDRESS } from '../constants';
 
+// Helper function to hash passcode
+export function hashPasscode(passcode) {
+    if (!passcode || passcode.trim() === '') {
+        return ethers.constants.HashZero;
+    }
+    return ethers.utils.keccak256(ethers.utils.toUtf8Bytes(passcode));
+}
+
 export async function deployContract(
     signer,
     policyName,
@@ -11,7 +19,8 @@ export async function deployContract(
     location,
     employeeCount,
     maxAmount,
-    category
+    category,
+    passcode = ''
 ) {
     try {
         // Check if signer is available and connected
@@ -35,6 +44,9 @@ export async function deployContract(
             // gasPrice: 10000000000,
         };
 
+        // Hash the passcode if provided
+        const passcodeHash = hashPasscode(passcode);
+
         console.log(
             'Deploying reimbursement policy contract...',
             policyName,
@@ -45,7 +57,9 @@ export async function deployContract(
             maxAmount,
             category,
             'USDFC Address:',
-            USDFC_TOKEN_ADDRESS
+            USDFC_TOKEN_ADDRESS,
+            'Has Passcode:',
+            passcode ? 'Yes' : 'No'
         );
 
         const contract = await factory.deploy(
@@ -56,7 +70,8 @@ export async function deployContract(
             employeeCount,
             parseInt(maxAmount), // Convert to integer instead of using parseUnits
             category,
-            USDFC_TOKEN_ADDRESS // Add USDFC token address as the last parameter
+            USDFC_TOKEN_ADDRESS, // Add USDFC token address as the last parameter
+            passcodeHash
         );
 
         await contract.deployed();
@@ -105,11 +120,11 @@ export const getMetadata = async (signer, address) => {
 };
 
 // Submit a reimbursement claim
-export const submitClaim = async (signer, address, amount, description, receiptHash, receiptCid) => {
+export const submitClaim = async (signer, address, amount, description, receiptHash, receiptCid, passcode = '') => {
     const contract = new ethers.Contract(address, CLEARED_CONTRACT.abi, signer);
-    console.log('submitting claim', amount, description, receiptHash, receiptCid);
+    console.log('submitting claim', amount, description, receiptHash, receiptCid, 'has passcode:', !!passcode);
     const amountAsInteger = parseInt(amount);
-    const result = await contract.submitClaim(amountAsInteger, description, receiptHash, receiptCid);
+    const result = await contract.submitClaim(amountAsInteger, description, receiptHash, receiptCid, passcode);
     console.log('submit claim result', result);
     await result.wait(); // Wait for transaction confirmation
     return result;
@@ -295,5 +310,18 @@ export const getFundingInfo = async (signer, contractAddress) => {
     } catch (error) {
         console.error('Error getting funding info:', error);
         throw error;
+    }
+};
+
+// Get contract passcode status
+export const getContractPasscodeStatus = async (signer, contractAddress) => {
+    try {
+        const contract = new ethers.Contract(contractAddress, CLEARED_CONTRACT.abi, signer);
+        const hasPasscode = await contract.hasPasscode();
+        console.log('Contract has passcode:', hasPasscode);
+        return hasPasscode;
+    } catch (error) {
+        console.error('Error checking contract passcode status:', error);
+        return false; // Default to no passcode if check fails
     }
 };

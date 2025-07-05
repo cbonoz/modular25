@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { ethers } from 'ethers';
 import {
     Card,
@@ -14,22 +14,86 @@ import { InfoCircleOutlined } from '@ant-design/icons';
 import TextArea from 'antd/es/input/TextArea';
 import { FileDrop } from '../FileDrop';
 import { isEmpty } from '../../util';
+import { evaluateClaimWithAI } from '../../util/aiService';
+import { getContractPasscodeStatus } from '../../util/appContract';
 
 const EmployeeClaimForm = ({
     data,
-    claimAmount,
-    setClaimAmount,
-    claimDescription,
-    setClaimDescription,
-    files,
-    setFiles,
-    shouldUpload,
-    setShouldUpload,
     contractUSDFCBalance,
     usdcLoading,
     rpcLoading,
-    onSubmitClaim
+    onSubmitClaim,
+    signer,
+    contractAddress
 }) => {
+    // Internal state management - no more prop drilling
+    const [claimAmount, setClaimAmount] = useState('');
+    const [claimDescription, setClaimDescription] = useState('');
+    const [files, setFiles] = useState([]);
+    const [shouldUpload, setShouldUpload] = useState(true);
+    const [passcode, setPasscode] = useState('');
+    const [contractHasPasscode, setContractHasPasscode] = useState(false);
+    
+    // AI evaluation state
+    const [aiEvaluation, setAiEvaluation] = useState(null);
+    const [aiEvaluating, setAiEvaluating] = useState(false);
+
+    // Check contract passcode status on mount
+    useEffect(() => {
+        const checkPasscodeStatus = async () => {
+            if (signer && contractAddress) {
+                try {
+                    const hasPasscode = await getContractPasscodeStatus(signer, contractAddress);
+                    setContractHasPasscode(hasPasscode);
+                } catch (error) {
+                    console.error('Error checking passcode status:', error);
+                }
+            }
+        };
+        checkPasscodeStatus();
+    }, [signer, contractAddress]);
+
+    // AI evaluation handler
+    const handleEvaluateWithAI = async (claimData) => {
+        setAiEvaluating(true);
+        try {
+            const evaluation = await evaluateClaimWithAI(data, claimData);
+            setAiEvaluation(evaluation);
+            return evaluation;
+        } catch (error) {
+            console.error('AI evaluation failed:', error);
+            setAiEvaluation({
+                approved: null,
+                confidence: 0,
+                reasoning: 'AI evaluation service temporarily unavailable. Manual review required.',
+                flags: ['AI_SERVICE_ERROR'],
+                recommendation: 'MANUAL_REVIEW'
+            });
+        } finally {
+            setAiEvaluating(false);
+        }
+    };
+
+    // Handle form submission
+    const handleSubmit = () => {
+        if (onSubmitClaim) {
+            onSubmitClaim({
+                amount: claimAmount,
+                description: claimDescription,
+                files,
+                shouldUpload,
+                passcode: contractHasPasscode ? passcode : ''
+            });
+            
+            // Clear form after submission
+            setClaimAmount('');
+            setClaimDescription('');
+            setFiles([]);
+            setPasscode('');
+            setAiEvaluation(null);
+        }
+    };
+
     return (
         <div>
             <h4>Request reimbursement</h4>
@@ -120,16 +184,131 @@ const EmployeeClaimForm = ({
             </p>
             {shouldUpload && <FileDrop
                 files={files}
-                setFiles={(files) => setFiles(files)}
+                setFiles={setFiles}
                 disabled={!data?.policyParams?.isActive}
             />}
             <br />
 
+            {/* AI Evaluation Section */}
+            <div style={{ marginBottom: '16px' }}>
+                <h5>AI Policy Evaluation</h5>
+                <p style={{ fontSize: '14px', color: '#666' }}>
+                    Get an AI assessment of your claim against the policy rules before submitting.
+                </p>
+                
+                <Button
+                    type="default"
+                    onClick={() => {
+                        handleEvaluateWithAI({
+                            amount: claimAmount,
+                            description: claimDescription,
+                            hasReceipt: !isEmpty(files)
+                        });
+                    }}
+                    loading={aiEvaluating}
+                    disabled={aiEvaluating || !claimAmount || !claimDescription || !data?.policyParams?.isActive}
+                    style={{ marginBottom: '16px' }}
+                >
+                    {aiEvaluating ? 'Evaluating...' : 'Evaluate Claim with AI'}
+                </Button>
+
+                {/* AI Evaluation Results */}
+                {aiEvaluation && (
+                    <Card 
+                        size="small" 
+                        style={{ 
+                            background: aiEvaluation.recommendation === 'APPROVE' ? '#f6ffed' : 
+                                       aiEvaluation.recommendation === 'REJECT' ? '#fff2f0' : '#fffbe6',
+                            border: `1px solid ${aiEvaluation.recommendation === 'APPROVE' ? '#b7eb8f' : 
+                                                 aiEvaluation.recommendation === 'REJECT' ? '#ffccc7' : '#ffe58f'}`
+                        }}
+                    >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                            <span style={{ fontSize: '16px' }}>
+                                {aiEvaluation.recommendation === 'APPROVE' ? '✅' : 
+                                 aiEvaluation.recommendation === 'REJECT' ? '❌' : '⚠️'}
+                            </span>
+                            <strong>
+                                AI Recommendation: {aiEvaluation.recommendation.replace('_', ' ')}
+                            </strong>
+                            <span style={{ 
+                                fontSize: '12px', 
+                                color: '#666',
+                                background: 'rgba(0,0,0,0.1)',
+                                padding: '2px 6px',
+                                borderRadius: '4px'
+                            }}>
+                                {Math.round(aiEvaluation.confidence * 100)}% confidence
+                            </span>
+                        </div>
+                        
+                        <p style={{ margin: '8px 0', fontSize: '14px' }}>
+                            <strong>Analysis:</strong> {aiEvaluation.reasoning}
+                        </p>
+                        
+                        {aiEvaluation.flags && aiEvaluation.flags.length > 0 && (
+                            <div style={{ marginTop: '8px' }}>
+                                <strong style={{ fontSize: '12px', color: '#666' }}>Flags:</strong>
+                                <div style={{ marginTop: '4px' }}>
+                                    {aiEvaluation.flags.map((flag, index) => (
+                                        <span 
+                                            key={index}
+                                            style={{
+                                                display: 'inline-block',
+                                                background: '#ff4d4f',
+                                                color: 'white',
+                                                fontSize: '10px',
+                                                padding: '2px 6px',
+                                                borderRadius: '3px',
+                                                marginRight: '4px',
+                                                marginBottom: '2px'
+                                            }}
+                                        >
+                                            {flag.replace('_', ' ')}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        
+                        <div style={{ marginTop: '12px', fontSize: '12px', color: '#8c8c8c' }}>
+                            💡 This is an AI assessment for guidance only. Final approval is at the discretion of the policy owner.
+                        </div>
+                    </Card>
+                )}
+            </div>
+
+            {/* Passcode Section - only shows when contract requires it */}
+            {contractHasPasscode && (
+                <div style={{ marginBottom: '16px' }}>
+                    <h5>Contract Passcode</h5>
+                    <p style={{ fontSize: '14px', color: '#666' }}>
+                        Enter the passcode to authorize this claim submission.
+                    </p>
+                    
+                    <Input.Password
+                        placeholder="Enter contract passcode"
+                        value={passcode}
+                        onChange={(e) => setPasscode(e.target.value)}
+                        disabled={!data?.policyParams?.isActive}
+                        style={{ marginBottom: '8px' }}
+                    />
+                </div>
+            )}
+
+            {/* Submit Button */}
             <Button
                 type="primary"
-                onClick={onSubmitClaim}
+                onClick={handleSubmit}
                 loading={rpcLoading}
-                disabled={rpcLoading || !claimAmount || !claimDescription || isEmpty(files) || !data?.policyParams?.isActive}
+                disabled={
+                    rpcLoading || 
+                    !claimAmount || 
+                    !claimDescription || 
+                    isEmpty(files) || 
+                    !data?.policyParams?.isActive ||
+                    (contractHasPasscode && !passcode)
+                }
             >
                 {data?.policyParams?.isActive ? 'Submit Claim' : 'Policy Inactive'}
             </Button>

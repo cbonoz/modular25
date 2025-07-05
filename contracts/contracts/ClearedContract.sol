@@ -14,6 +14,10 @@ contract ClearedContract {
     // This would be the actual USDFC contract address when deployed
     IERC20 public immutable usdfc;
 
+    // Optional passcode hash for additional security
+    bytes32 private passcodeHash;
+    bool public hasPasscode;
+
     // Struct to represent a reimbursement claim
     struct ReimbursementClaim {
         address employee;
@@ -73,7 +77,8 @@ contract ClearedContract {
         string memory _employeeCount,
         uint256 _maxAmount,
         string memory _category,
-        address _usdfc
+        address _usdfc,
+        bytes32 _passcodeHash
     ) {
         require(_usdfc != address(0), "USDFC token address cannot be zero");
 
@@ -81,6 +86,12 @@ contract ClearedContract {
         usdfc = IERC20(_usdfc);
         policyName = _policyName;
         policyDescription = _policyDescription;
+
+        // Set passcode if provided
+        if (_passcodeHash != bytes32(0)) {
+            passcodeHash = _passcodeHash;
+            hasPasscode = true;
+        }
 
         policyParams = PolicyParams({
             businessType: _businessType,
@@ -104,13 +115,21 @@ contract ClearedContract {
         _;
     }
 
+    modifier validPasscode(string memory _passcode) {
+        if (hasPasscode) {
+            require(keccak256(abi.encodePacked(_passcode)) == passcodeHash, "Invalid passcode");
+        }
+        _;
+    }
+
     // Submit a reimbursement claim
     function submitClaim(
         uint256 _amount,
         string memory _description,
         bytes32 _receiptHash,
-        string memory _receiptCid
-    ) public onlyActivePolicy {
+        string memory _receiptCid,
+        string memory _passcode
+    ) public onlyActivePolicy validPasscode(_passcode) {
         require(_amount > 0, "Amount must be greater than 0");
         require(_amount <= policyParams.maxAmount, "Amount exceeds policy maximum");
         require(_receiptHash != bytes32(0), "Receipt hash required");

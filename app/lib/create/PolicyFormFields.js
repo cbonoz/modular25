@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Input, Select, Row, Col, Tooltip } from 'antd';
 import { InfoCircleOutlined } from '@ant-design/icons';
 import { US_STATES } from '../../constants';
@@ -8,13 +8,40 @@ import TextArea from 'antd/es/input/TextArea';
 
 const { Option } = Select;
 
-const PolicyFormFields = ({
-    data,
-    updateData,
-    initialFunding,
-    setInitialFunding,
-    userUSDFCBalance = '0'
-}) => {
+const PolicyFormFields = ({ onDataChange, initialData = {} }) => {
+    // Internal state management
+    const [formData, setFormData] = useState({
+        name: '',
+        description: '',
+        businessType: '',
+        location: '',
+        employeeCount: '',
+        maxAmount: '',
+        category: '',
+        passcode: '',
+        ...initialData
+    });
+
+    // Update internal state when initialData changes (for demo button)
+    useEffect(() => {
+        if (initialData && Object.keys(initialData).length > 0) {
+            setFormData(prevData => ({
+                ...prevData,
+                ...initialData
+            }));
+        }
+    }, [initialData]);
+
+    const updateData = (key, value) => {
+        const newData = { ...formData, [key]: value };
+        setFormData(newData);
+        
+        // Notify parent component of changes
+        if (onDataChange) {
+            onDataChange(newData);
+        }
+    };
+
     const businessTypes = [
         { value: 'technology', label: 'Technology' },
         { value: 'healthcare', label: 'Healthcare' },
@@ -51,7 +78,7 @@ const PolicyFormFields = ({
             <h4>Policy Details</h4>
             <Input
                 placeholder="Policy name (e.g., Remote Work Reimbursement Policy)"
-                value={data.name}
+                value={formData.name}
                 onChange={(e) => updateData('name', e.target.value)}
                 style={{ marginBottom: '16px' }}
             />
@@ -59,7 +86,7 @@ const PolicyFormFields = ({
             <TextArea
                 rows={3}
                 placeholder="Describe the purpose and scope of this reimbursement policy..."
-                value={data.description}
+                value={formData.description}
                 onChange={(e) => updateData('description', e.target.value)}
                 style={{ marginBottom: '16px' }}
             />
@@ -69,7 +96,7 @@ const PolicyFormFields = ({
                     <label>Business Type</label>
                     <Select
                         placeholder="Select business type"
-                        value={data.businessType}
+                        value={formData.businessType}
                         onChange={(value) => updateData('businessType', value)}
                         style={{ width: '100%' }}
                     >
@@ -89,7 +116,7 @@ const PolicyFormFields = ({
                     </label>
                     <Select
                         placeholder="Select state/location"
-                        value={data.location}
+                        value={formData.location}
                         onChange={(value) => updateData('location', value)}
                         style={{ width: '100%' }}
                         showSearch
@@ -111,7 +138,7 @@ const PolicyFormFields = ({
                     <label>Employee Count</label>
                     <Select
                         placeholder="Select employee count"
-                        value={data.employeeCount}
+                        value={formData.employeeCount}
                         onChange={(value) => updateData('employeeCount', value)}
                         style={{ width: '100%' }}
                     >
@@ -126,7 +153,7 @@ const PolicyFormFields = ({
                     <label>Reimbursement Category</label>
                     <Select
                         placeholder="Select category"
-                        value={data.category}
+                        value={formData.category}
                         onChange={(value) => updateData('category', value)}
                         style={{ width: '100%' }}
                     >
@@ -150,11 +177,25 @@ const PolicyFormFields = ({
                     <Input
                         type="number"
                         placeholder="e.g., 100"
-                        value={data.maxAmount}
+                        value={formData.maxAmount}
                         onChange={(e) => updateData('maxAmount', e.target.value)}
                         prefix="$"
                         min="1"
                         step="1"
+                    />
+                </Col>
+                <Col span={12}>
+                    <label>
+                        Access Passcode (Optional)
+                        <Tooltip title="Set a passcode to restrict who can submit claims to this policy">
+                            <InfoCircleOutlined style={{ marginLeft: '4px' }} />
+                        </Tooltip>
+                    </label>
+                    <Input.Password
+                        placeholder="Leave empty for no passcode"
+                        value={formData.passcode || ''}
+                        onChange={(e) => updateData('passcode', e.target.value)}
+                        autoComplete="new-password"
                     />
                 </Col>
             </Row>

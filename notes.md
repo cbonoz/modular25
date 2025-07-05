@@ -8,7 +8,7 @@ Cleared
  
 Self-governing reimbursements cleared on-chain with AI and human review.
  
-Demo url (deployed on filecoin calibration):
+Demo url (deployed on filecoin calibration): https://clearedapp.vercel.app/
  
 Video: 
  
