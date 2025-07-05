@@ -57,6 +57,7 @@ import { FileDrop } from '../FileDrop';
 import TextArea from 'antd/es/input/TextArea';
 import { InfoCircleOutlined } from '@ant-design/icons';
 import { uploadFilesWithSynapse } from '../../util/synapse';
+import { CLEARED_CONTRACT } from '@/util/metadata';
 
 const PolicyDetail = ({ uploadId }) => {
     // All hooks must be called at the top level, before any early returns
@@ -371,11 +372,8 @@ const PolicyDetail = ({ uploadId }) => {
 
         setRpcPending();
         try {
-            // Call the contract's updatePolicyStatus function
-            const contract = new ethers.Contract(uploadId, [
-                "function updatePolicyStatus(bool) public"
-            ], signer);
-            const tx = await contract.updatePolicyStatus(newStatus);
+            // Use the proper utility function instead of calling contract directly
+            await updatePolicyStatus(signer, uploadId, newStatus);
             setResult({
                 type: RESULT_MESSAGES.POLICY_STATUS_UPDATED,
                 status: newStatus ? 'Activated' : 'Deactivated'

@@ -75,9 +75,10 @@ const Home = () => {
                   </div>
                 ))}
               </Space>
+              <br/>
 
               {/* CTA Buttons */}
-              <Space size="middle" style={{ marginTop: '32px' }}>
+              <Space size="middle" style={{ marginTop: '64px' }}>
                 <Button 
                   size="large" 
                   type="primary" 
