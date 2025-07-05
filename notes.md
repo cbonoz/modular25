@@ -6,7 +6,7 @@
 Cleared
 ---
  
-Self-governing reimbursements cleared on-chain with AI and human review.
+Self-governing reimbursements approved on-chain with AI and human review.
  
 Live demo app (deployed on filecoin calibration): https://clearedapp.vercel.app/
  

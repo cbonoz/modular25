@@ -310,20 +310,37 @@ export const fundContractWithUSDFC = async (signer, contractAddress, amountStrin
         const currentAllowance = await usdtcContract.allowance(userAddress, contractAddress);
         console.log('Current allowance:', ethers.utils.formatUnits(currentAllowance, 18));
         
-        // If allowance is insufficient, approve the exact amount needed
+        // If allowance is insufficient, approve a larger amount to avoid frequent approvals
         if (currentAllowance.lt(amount)) {
-            console.log('Approving USDFC spend for contract:', contractAddress, 'amount:', amount.toString());
+            console.log('Insufficient allowance. Approving USDFC spend for contract:', contractAddress);
+            
+            // Reset allowance to 0 first (some tokens require this)
+            try {
+                const resetTx = await usdtcContract.approve(contractAddress, 0);
+                await resetTx.wait();
+                console.log('Allowance reset to 0');
+            } catch (resetError) {
+                console.log('Allowance reset failed (this is OK for most tokens):', resetError.message);
+            }
+            
+            // Approve the exact amount needed
+            console.log('Approving amount:', amount.toString());
             const approveTx = await usdtcContract.approve(contractAddress, amount);
             console.log('Approval transaction sent:', approveTx.hash);
-            await approveTx.wait();
-            console.log('USDFC approval confirmed');
+            
+            // Wait for approval with proper confirmation
+            const receipt = await approveTx.wait();
+            console.log('USDFC approval confirmed in block:', receipt.blockNumber);
+            
+            // Add a small delay to ensure the approval is fully propagated
+            await new Promise(resolve => setTimeout(resolve, 2000));
             
             // Verify the approval went through
             const newAllowance = await usdtcContract.allowance(userAddress, contractAddress);
             console.log('New allowance after approval:', ethers.utils.formatUnits(newAllowance, 18));
             
             if (newAllowance.lt(amount)) {
-                throw new Error('Approval failed. Please try again.');
+                throw new Error('Approval failed. The allowance was not set correctly. Please try again.');
             }
         } else {
             console.log('Sufficient allowance already exists');
@@ -332,6 +349,14 @@ export const fundContractWithUSDFC = async (signer, contractAddress, amountStrin
         // Use the contract's fundContract function with retry mechanism
         const contract = new ethers.Contract(contractAddress, CLEARED_CONTRACT.abi, signer);
         console.log('Funding contract through fundContract function...');
+        
+        // Double-check allowance right before the transaction
+        const finalAllowance = await usdtcContract.allowance(userAddress, contractAddress);
+        console.log('Final allowance check before funding:', ethers.utils.formatUnits(finalAllowance, 18));
+        
+        if (finalAllowance.lt(amount)) {
+            throw new Error('Allowance verification failed. The contract does not have permission to transfer your USDFC tokens.');
+        }
         
         // Use the utility function for contract transaction with retry logic
         return await executeContractTransactionWithRetry(
@@ -346,8 +371,11 @@ export const fundContractWithUSDFC = async (signer, contractAddress, amountStrin
         if (error.message.includes('Insufficient USDFC balance')) {
             throw error; // Pass through the detailed balance message
         }
-        if (error.message.includes('Approval failed')) {
+        if (error.message.includes('Approval failed') || error.message.includes('Allowance')) {
             throw error; // Pass through approval errors
+        }
+        if (error.message.includes('transfer amount exceeds allowance')) {
+            throw new Error('Token allowance error. Please try the funding process again - the approval may need to be repeated.');
         }
         
         handleContractError(error, 'fund contract');
@@ -414,6 +442,16 @@ export const debugFundingPrerequisites = async (signer, contractAddress, amountS
     try {
         console.log('=== DEBUGGING FUNDING PREREQUISITES ===');
         
+        // Validate amount parameter first
+        if (!amountString || amountString.toString().trim() === '') {
+            throw new Error('Amount is required and cannot be empty');
+        }
+        
+        const numericAmount = parseFloat(amountString);
+        if (isNaN(numericAmount) || numericAmount <= 0) {
+            throw new Error(`Invalid amount: "${amountString}". Amount must be a valid number greater than 0.`);
+        }
+        
         // Get user address
         const userAddress = await signer.getAddress();
         console.log('User address:', userAddress);
@@ -434,8 +472,8 @@ export const debugFundingPrerequisites = async (signer, contractAddress, amountS
         const userBalance = await getUserUSDFCBalance(signer, userAddress);
         console.log('User USDFC balance:', ethers.utils.formatUnits(userBalance, 18));
         
-        // Check amount conversion
-        const amount = ethers.utils.parseUnits(amountString.toString(), 18);
+        // Check amount conversion - now safe to parse since we validated above
+        const amount = ethers.utils.parseUnits(numericAmount.toString(), 18);
         console.log('Amount to fund (parsed):', amount.toString());
         console.log('Amount to fund (formatted):', ethers.utils.formatUnits(amount, 18));
         

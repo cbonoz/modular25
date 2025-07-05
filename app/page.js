@@ -10,6 +10,7 @@ import { useRouter } from 'next/navigation';
 
 // TODO: change
 const CHECKLIST_ITEMS = [
+  "Generate shareable one-click reimbursement URLs for employees",
   "Validate reimbursements against custom policy rules, on-chain",
   "Filecoin-backed proof, automated decisioning, instant events",
   "No accounts or vendor agreements required"

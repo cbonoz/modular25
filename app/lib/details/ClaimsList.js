@@ -8,7 +8,8 @@ const ClaimsList = ({
     isOwnerView = false,
     onProcessClaim,
     getStatusColor,
-    getStatusText
+    getStatusText,
+    rpcLoading = false
 }) => {
     if (claims.length === 0) {
         return <p>{isOwnerView ? 'No claims submitted yet.' : 'No claims submitted yet.'}</p>;
@@ -24,7 +25,7 @@ const ClaimsList = ({
                     title={`Claim #${claim.id}${isOwnerView ? ` - ${getStatusText(claim.status)}` : ''}`}
                 >
                     {isOwnerView && (
-                        <p><strong>Employee:</strong> {claim.employee}</p>
+                        <p><strong>Requester:</strong> {claim.employee}</p>
                     )}
                     <p><strong>Amount:</strong> ${claim.amount}</p>
                     <p><strong>Description:</strong> {claim.description}</p>
@@ -40,6 +41,8 @@ const ClaimsList = ({
                             <Button
                                 type="primary"
                                 size="small"
+                                loading={rpcLoading}
+                                disabled={rpcLoading}
                                 onClick={() => onProcessClaim(claim.id, 1, '')}
                                 style={{ marginRight: '8px' }}
                             >
@@ -48,6 +51,8 @@ const ClaimsList = ({
                             <Button
                                 type="default"
                                 size="small"
+                                loading={rpcLoading}
+                                disabled={rpcLoading}
                                 onClick={() => {
                                     const reason = prompt('Reason for rejection:');
                                     if (reason !== null) {

@@ -7,9 +7,10 @@ import { ethers } from 'ethers';
  * @param {File[]} files - Array of files to upload
  * @param {Object} metadata - Optional metadata to include
  * @param {Object} signer - Ethers signer from wallet (MetaMask)
+ * @param {Object} chain - Chain object from wagmi (optional, will try to get from signer if not provided)
  * @returns {Promise<string>} - Returns the CID of the uploaded content
  */
-export async function uploadFilesWithSynapse(files, metadata = null, signer = null) {
+export async function uploadFilesWithSynapse(files, metadata = null, signer = null, chain = null) {
     if (!files || files.length === 0) {
         throw new Error('No files provided for upload');
     }
@@ -17,10 +18,57 @@ export async function uploadFilesWithSynapse(files, metadata = null, signer = nu
     try {
         console.log('🔄 Starting Synapse upload for files:', files.map(f => f.name));
         
-        // Initialize Synapse SDK
-        const synapse = new Synapse({ wallet: signer });
+        // Try to get network from multiple sources
+        let network;
+        
+        // First try: use provided chain
+        if (chain?.id) {
+            network = { chainId: chain.id, name: chain.name };
+            console.log('Using provided chain:', network);
+        }
+        // Second try: get from signer provider
+        else if (signer?.provider?.network) {
+            network = signer.provider.network;
+            console.log('Using signer network:', network);
+        }
+        // Third try: get from signer provider getNetwork()
+        else if (signer?.provider?.getNetwork) {
+            try {
+                network = await signer.provider.getNetwork();
+                console.log('Using signer.provider.getNetwork():', network);
+            } catch (e) {
+                console.warn('Failed to get network from signer.provider.getNetwork():', e);
+            }
+        }
+
+        if (!network?.chainId) {
+            throw new Error('Unable to determine network from signer or chain parameter. Please ensure wallet is connected.');
+        }
+
+        console.log('📡 Detected network:', network);
+
+        // Determine which RPC URL to use based on network
+        let rpcUrl;
+        if (network.chainId === 314) {
+            // Filecoin mainnet
+            rpcUrl = RPC_URLS.mainnet?.websocket || RPC_URLS.mainnet?.http || 'https://api.node.glif.io';
+        } else if (network.chainId === 314159) {
+            // Filecoin Calibration testnet
+            rpcUrl = RPC_URLS.calibration?.websocket || RPC_URLS.calibration?.http || 'https://api.calibration.node.glif.io';
+        } else {
+            throw new Error(`Unsupported network for Synapse: ${network.name} (chainId: ${network.chainId}). Please switch to Filecoin mainnet or Calibration testnet.`);
+        }
+        
+        console.log('Using RPC URL:', rpcUrl);
+        
+        // Initialize Synapse SDK with proper network configuration
+        const synapse = new Synapse({ 
+            wallet: signer,
+            rpcURL: rpcUrl,
+            network: network.chainId === 314 ? 'mainnet' : 'calibration'
+        });
         await synapse.init();
-        console.log('✓ Synapse SDK initialized with MetaMask');
+        console.log('✓ Synapse SDK initialized with network:', network.name);
 
         // Select storage provider
         const storageProvider = await synapse.selectStorageProvider();
@@ -50,7 +98,8 @@ export async function uploadFilesWithSynapse(files, metadata = null, signer = nu
                               errorMessage.includes('502') || 
                               errorMessage.includes('503') || 
                               errorMessage.includes('timeout') ||
-                              errorMessage.includes('network');
+                              errorMessage.includes('network') ||
+                              errorMessage.includes('Pandora service address');
         
         const isGasError = errorMessage.includes('gas') || 
                           errorMessage.includes('exit=[33]') ||

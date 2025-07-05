@@ -269,8 +269,13 @@ export const executeContractTransactionWithRetry = async (
     try {
       // Try to estimate gas first (optional, for debugging)
       try {
-        const gasEstimate = await contractMethod.estimateGas(...args);
-        console.log(`Gas estimate for ${operationName}:`, gasEstimate.toString());
+        // Check if the contractMethod has estimateGas available
+        if (contractMethod && typeof contractMethod.estimateGas === 'function') {
+          const gasEstimate = await contractMethod.estimateGas(...args);
+          console.log(`Gas estimate for ${operationName}:`, gasEstimate.toString());
+        } else {
+          console.log('Gas estimation not available for this method');
+        }
       } catch (estimateError) {
         console.log('Gas estimation failed:', estimateError.message);
         // Continue anyway - estimation failure doesn't mean transaction will fail

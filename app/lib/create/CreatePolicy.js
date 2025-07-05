@@ -104,8 +104,8 @@ function CreatePolicy() {
         if (!data.name || !data.description) {
             return 'Please provide a policy name and description.';
         }
-        if (!data.businessType || !data.location || !data.employeeCount) {
-            return 'Please provide business type, location, and employee count.';
+        if (!data.businessType || !data.employeeCount) {
+            return 'Please provide business type and employee count.';
         }
         if (!data.maxAmount || !data.category) {
             return 'Please specify maximum reimbursement amount and category.';

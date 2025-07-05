@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from 'react';
 import { Input, Select, Row, Col, Tooltip } from 'antd';
 import { InfoCircleOutlined } from '@ant-design/icons';
-import { US_STATES } from '../../constants';
 import TextArea from 'antd/es/input/TextArea';
 
 const { Option } = Select;
@@ -114,22 +113,12 @@ const PolicyFormFields = ({ onDataChange, initialData = {} }) => {
                             <InfoCircleOutlined style={{ marginLeft: '4px' }} />
                         </Tooltip>
                     </label>
-                    <Select
-                        placeholder="Select state/location"
-                        value={formData.location}
-                        onChange={(value) => updateData('location', value)}
+                    <Input
+                        placeholder="Enter your business location (e.g., California, London, UK, Tokyo, Japan)"
+                        value={formData.location || ''}
+                        onChange={(e) => updateData('location', e.target.value)}
                         style={{ width: '100%' }}
-                        showSearch
-                        filterOption={(input, option) =>
-                            option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0
-                        }
-                    >
-                        {US_STATES.map(state => (
-                            <Option key={state.value} value={state.value}>
-                                {state.label}
-                            </Option>
-                        ))}
-                    </Select>
+                    />
                 </Col>
             </Row>
 

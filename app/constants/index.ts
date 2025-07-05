@@ -4,9 +4,9 @@ import {
 } from '@wagmi/core/chains';
 
 export const siteConfig = {
-    title: 'Cleared | Self-governing Reimbursements',
+    title: 'Cleared | On-chain reimbursement policies',
     name: 'Cleared',
-    description: 'Self-governing reimbursements cleared on-chain with AI and human review.',
+    description: 'Generate one click reimbursement URLs with self-governing policies cleared on-chain with AI and human review.',
     cta: {
         primary: 'Create your Reimbursement policy',
         secondary: 'Learn more'

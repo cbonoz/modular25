@@ -10,23 +10,36 @@ const OwnerFundingCard = ({
     userUSDFCBalance,
     usdcLoading,
     rpcLoading,
+    policyStatusLoading, // Add policy status loading state
     onFundContract,
-    onWithdrawFromContract
+    onWithdrawFromContract,
+    onFundingComplete // Add the new prop
 }) => {
     const [fundingAmount, setFundingAmount] = useState('');
     const [withdrawAmount, setWithdrawAmount] = useState('');
 
-    const handleFundSubmit = () => {
+    // Check if any loading operation is active
+    const isAnyLoading = rpcLoading || policyStatusLoading;
+
+    const handleFundSubmit = async () => {
         if (onFundContract && fundingAmount) {
-            onFundContract(fundingAmount);
+            await onFundContract(fundingAmount);
             setFundingAmount('');
+            // Call the completion callback to refresh data
+            if (onFundingComplete) {
+                await onFundingComplete();
+            }
         }
     };
 
-    const handleWithdrawSubmit = () => {
+    const handleWithdrawSubmit = async () => {
         if (onWithdrawFromContract && withdrawAmount) {
-            onWithdrawFromContract(withdrawAmount);
+            await onWithdrawFromContract(withdrawAmount);
             setWithdrawAmount('');
+            // Call the completion callback to refresh data
+            if (onFundingComplete) {
+                await onFundingComplete();
+            }
         }
     };
 
@@ -105,8 +118,8 @@ const OwnerFundingCard = ({
                             <Button
                                 type="primary"
                                 onClick={handleFundSubmit}
-                                loading={rpcLoading}
-                                disabled={!fundingAmount || rpcLoading || parseFloat(fundingAmount) <= 0}
+                                loading={rpcLoading} // Only show loading for funding operation
+                                disabled={!fundingAmount || isAnyLoading || parseFloat(fundingAmount) <= 0} // Disable if any operation is loading
                                 block
                             >
                                 Fund Policy
@@ -126,8 +139,8 @@ const OwnerFundingCard = ({
                             <Button
                                 type="default"
                                 onClick={handleWithdrawSubmit}
-                                loading={rpcLoading}
-                                disabled={!withdrawAmount || rpcLoading || parseFloat(withdrawAmount) <= 0}
+                                loading={rpcLoading} // Only show loading for withdraw operation
+                                disabled={!withdrawAmount || isAnyLoading || parseFloat(withdrawAmount) <= 0} // Disable if any operation is loading
                                 block
                             >
                                 Withdraw

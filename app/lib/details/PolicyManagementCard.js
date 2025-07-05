@@ -1,15 +1,21 @@
 'use client';
 
 import React from 'react';
-import { Card, Button, Tooltip } from 'antd';
-import { InfoCircleOutlined, PoweroffOutlined, CheckCircleOutlined } from '@ant-design/icons';
+import { Card, Button, Tooltip, Typography } from 'antd';
+import { InfoCircleOutlined, PoweroffOutlined, CheckCircleOutlined, StopOutlined, PlayCircleOutlined } from '@ant-design/icons';
 
-const PolicyManagementCard = ({ isActive, rpcLoading, onUpdatePolicyStatus }) => {
-    const handleToggleStatus = () => {
-        if (onUpdatePolicyStatus) {
-            onUpdatePolicyStatus(!isActive);
-        }
-    };
+const { Text } = Typography;
+
+const PolicyManagementCard = ({ 
+    policy, 
+    handleUpdatePolicyStatus, 
+    policyStatusLoading, 
+    rpcLoading, 
+    isOwner 
+}) => {
+    // Disable buttons when any loading state is active
+    const isAnyLoading = policyStatusLoading || rpcLoading;
+    const isActive = policy?.policyParams?.isActive;
 
     return (
         <Card 
@@ -23,44 +29,30 @@ const PolicyManagementCard = ({ isActive, rpcLoading, onUpdatePolicyStatus }) =>
             }
             style={{ marginTop: '16px' }}
         >
-            <div style={{ textAlign: 'center' }}>
-                <div style={{ marginBottom: '16px' }}>
-                    <div style={{ color: '#666', fontSize: '14px', marginBottom: '8px' }}>
-                        Current Status
-                    </div>
-                    <div style={{ 
-                        fontSize: '18px', 
-                        fontWeight: '600',
-                        color: isActive ? '#52c41a' : '#ff4d4f'
-                    }}>
-                        {isActive ? 'Active' : 'Inactive'}
-                    </div>
+            {isOwner && (
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    <Button
+                        type={isActive ? "default" : "primary"}
+                        danger={isActive}
+                        loading={policyStatusLoading} // Only show loading for this specific action
+                        disabled={isAnyLoading} // Disable when any operation is loading
+                        onClick={() => handleUpdatePolicyStatus(isActive)}
+                        icon={isActive ? <StopOutlined /> : <PlayCircleOutlined />}
+                        size="large"
+                        style={{ minWidth: '140px' }}
+                    >
+                        {isActive ? 'Deactivate Policy' : 'Activate Policy'}
+                    </Button>
                 </div>
-
-                <Button
-                    type={isActive ? "default" : "primary"}
-                    danger={isActive}
-                    icon={isActive ? <PoweroffOutlined /> : <CheckCircleOutlined />}
-                    onClick={handleToggleStatus}
-                    loading={rpcLoading}
-                    size="large"
-                    style={{ minWidth: '140px' }}
-                >
-                    {isActive ? 'Deactivate Policy' : 'Activate Policy'}
-                </Button>
-
-                <div style={{ 
-                    marginTop: '12px', 
-                    fontSize: '12px', 
-                    color: '#666',
-                    fontStyle: 'italic'
-                }}>
-                    {isActive 
-                        ? 'Deactivating will prevent new claims from being submitted'
-                        : 'Activating will allow employees to submit new claims'
-                    }
+            )}
+            {!isActive && (
+                <div style={{ marginTop: 8 }}>
+                    <Text type="secondary">
+                        <InfoCircleOutlined /> This policy is currently inactive. 
+                        New claims cannot be submitted while the policy is inactive.
+                    </Text>
                 </div>
-            </div>
+            )}
         </Card>
     );
 };
