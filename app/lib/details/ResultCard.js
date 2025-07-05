@@ -121,7 +121,7 @@ const ResultCard = ({ result, uploadStatus }) => {
                                 {result.status === 'Approved' && ' & USDFC Reimbursed'}
                             </p>
                             {result.status === 'Approved' && (
-                                <p>The employee has been automatically reimbursed in USDFC.</p>
+                                <p>The requester has been automatically reimbursed in USDFC.</p>
                             )}
                             {result.reason && <p>Reason: {result.reason}</p>}
                         </div>
