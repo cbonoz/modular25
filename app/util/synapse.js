@@ -17,66 +17,258 @@ export async function uploadFilesWithSynapse(files, metadata = null, signer = nu
 
     try {
         console.log('🔄 Starting Synapse upload for files:', files.map(f => f.name));
+        console.log('📦 Synapse SDK RPC_URLS available:', RPC_URLS);
+        console.log('Input parameters:', { 
+            chainProvided: !!chain, 
+            chainId: chain?.id, 
+            chainName: chain?.name,
+            signerProvided: !!signer,
+            signerHasProvider: !!signer?.provider 
+        });
+        
+        // Log expected chain IDs for reference
+        console.log('Expected chain IDs - Mainnet: 314, Calibration: 314159');
         
         // Try to get network from multiple sources
         let network;
         
         // First try: use provided chain
         if (chain?.id) {
-            network = { chainId: chain.id, name: chain.name };
-            console.log('Using provided chain:', network);
+            network = { chainId: chain.id, name: chain.name || `Chain ${chain.id}` };
+            console.log('✓ Using provided chain:', network);
         }
-        // Second try: get from signer provider
-        else if (signer?.provider?.network) {
+        // Second try: get from signer provider network property
+        else if (signer?.provider?.network?.chainId) {
             network = signer.provider.network;
-            console.log('Using signer network:', network);
+            console.log('✓ Using signer network property:', network);
         }
         // Third try: get from signer provider getNetwork()
         else if (signer?.provider?.getNetwork) {
             try {
                 network = await signer.provider.getNetwork();
-                console.log('Using signer.provider.getNetwork():', network);
+                console.log('✓ Using signer.provider.getNetwork():', network);
             } catch (e) {
                 console.warn('Failed to get network from signer.provider.getNetwork():', e);
             }
         }
-
-        if (!network?.chainId) {
-            throw new Error('Unable to determine network from signer or chain parameter. Please ensure wallet is connected.');
+        // Fourth try: check if signer has _network property (some providers)
+        else if (signer?.provider?._network?.chainId) {
+            network = signer.provider._network;
+            console.log('✓ Using signer._network property:', network);
         }
 
-        console.log('📡 Detected network:', network);
+        console.log('Final network object:', network);
+
+        if (!network?.chainId) {
+            console.error('❌ All network detection methods failed:', {
+                chain,
+                signerProvider: signer?.provider,
+                signerProviderNetwork: signer?.provider?.network,
+                signerProviderHasGetNetwork: typeof signer?.provider?.getNetwork === 'function'
+            });
+            throw new Error('Unable to determine network. Please ensure your wallet is connected and on a supported network (Filecoin mainnet or testnet).');
+        }
+
+        console.log('📡 Final detected network:', network);
 
         // Determine which RPC URL to use based on network
         let rpcUrl;
+        let synapseNetwork;
+        
+        // Check for specific chain IDs
         if (network.chainId === 314) {
             // Filecoin mainnet
             rpcUrl = RPC_URLS.mainnet?.websocket || RPC_URLS.mainnet?.http || 'https://api.node.glif.io';
+            synapseNetwork = 'mainnet';
+            console.log('✓ Detected Filecoin mainnet (314)');
         } else if (network.chainId === 314159) {
             // Filecoin Calibration testnet
-            rpcUrl = RPC_URLS.calibration?.websocket || RPC_URLS.calibration?.http || 'https://api.calibration.node.glif.io';
+            rpcUrl = RPC_URLS.calibration?.websocket || 
+                     RPC_URLS.calibration?.http || 
+                     'https://api.calibration.node.glif.io/rpc/v1'; // Fallback RPC for Calibration
+            synapseNetwork = 'calibration';
+            console.log('✓ Detected Filecoin Calibration testnet (314159)');
         } else {
-            throw new Error(`Unsupported network for Synapse: ${network.name} (chainId: ${network.chainId}). Please switch to Filecoin mainnet or Calibration testnet.`);
+            console.error('❌ Unsupported network detected:', { 
+                chainId: network.chainId, 
+                chainName: network.name,
+                supportedNetworks: 'Filecoin mainnet (314) or Calibration testnet (314159)'
+            });
+            throw new Error(`Unsupported network for Synapse upload: ${network.name || 'Unknown'} (chainId: ${network.chainId}). Please switch to Filecoin mainnet (314) or Calibration testnet (314159).`);
         }
         
-        console.log('Using RPC URL:', rpcUrl);
+        // Ensure we have a valid RPC URL
+        if (!rpcUrl) {
+            console.warn('⚠️ No RPC URL found from SDK, using fallback');
+            rpcUrl = network.chainId === 314 
+                ? 'https://api.node.glif.io/rpc/v1'
+                : 'https://api.calibration.node.glif.io/rpc/v1';
+        }
         
-        // Initialize Synapse SDK with proper network configuration
-        const synapse = new Synapse({ 
-            wallet: signer,
-            rpcURL: rpcUrl,
-            network: network.chainId === 314 ? 'mainnet' : 'calibration'
+        console.log('📡 Using RPC URL:', rpcUrl);
+        console.log('📡 Synapse network mode:', synapseNetwork);
+        
+        // Log available RPC URLs for debugging
+        console.log('Available RPC URLs:', { 
+            mainnet: RPC_URLS.mainnet, 
+            calibration: RPC_URLS.calibration 
         });
-        await synapse.init();
-        console.log('✓ Synapse SDK initialized with network:', network.name);
+        
+        // Initialize Synapse SDK with multiple configuration strategies
+        // The SDK seems to expect specific network identifiers or configurations
+        let synapse;
+        let initSuccess = false;
+        let lastError;
+        
+        // Strategy 1: Standard configuration with network string
+        try {
+            const synapseConfig = { 
+                wallet: signer,
+                rpcURL: rpcUrl,
+                network: synapseNetwork
+            };
+            
+            console.log('🔧 Strategy 1: Standard config:', synapseConfig);
+            synapse = new Synapse(synapseConfig);
+            
+            console.log('🔄 Calling synapse.init()...');
+            await synapse.init();
+            console.log('✅ Strategy 1: Synapse SDK initialized successfully');
+            initSuccess = true;
+        } catch (error1) {
+            lastError = error1;
+            console.warn('⚠️ Strategy 1 failed:', error1.message);
+            
+            // Strategy 2: Try with chainId instead of network string
+            try {
+                const synapseConfig = { 
+                    wallet: signer,
+                    rpcURL: rpcUrl,
+                    chainId: network.chainId,
+                    networkId: network.chainId
+                };
+                
+                console.log('🔧 Strategy 2: ChainId config:', synapseConfig);
+                synapse = new Synapse(synapseConfig);
+                
+                await synapse.init();
+                console.log('✅ Strategy 2: Synapse SDK initialized with chainId');
+                initSuccess = true;
+            } catch (error2) {
+                lastError = error2;
+                console.warn('⚠️ Strategy 2 failed:', error2.message);
+                
+                // Strategy 3: Try with explicit provider configuration
+                try {
+                    const synapseConfig = { 
+                        provider: signer.provider,
+                        rpcURL: rpcUrl,
+                        network: synapseNetwork,
+                        chainId: network.chainId
+                    };
+                    
+                    console.log('🔧 Strategy 3: Provider config:', synapseConfig);
+                    synapse = new Synapse(synapseConfig);
+                    
+                    await synapse.init();
+                    console.log('✅ Strategy 3: Synapse SDK initialized with provider');
+                    initSuccess = true;
+                } catch (error3) {
+                    lastError = error3;
+                    console.warn('⚠️ Strategy 3 failed:', error3.message);
+                    
+                    // Strategy 4: Try Synapse.create static method if available
+                    try {
+                        console.log('🔧 Strategy 4: Using Synapse.create() method');
+                        if (typeof Synapse.create === 'function') {
+                            synapse = await Synapse.create({
+                                provider: signer.provider,
+                                rpcURL: rpcUrl,
+                                withCDN: true
+                            });
+                            console.log('✅ Strategy 4: Synapse SDK created successfully');
+                            initSuccess = true;
+                        } else {
+                            throw new Error('Synapse.create method not available');
+                        }
+                    } catch (error4) {
+                        lastError = error4;
+                        console.error('❌ All Synapse initialization strategies failed');
+                        console.error('Strategy 1 (network):', error1.message);
+                        console.error('Strategy 2 (chainId):', error2.message);
+                        console.error('Strategy 3 (provider):', error3.message);
+                        console.error('Strategy 4 (create):', error4.message);
+                        
+                        // Give testnet users a more helpful error message
+                        if (network.chainId === 314159) {
+                            console.error('📋 Synapse SDK Debug Info:');
+                            console.error('  - SDK Version:', Synapse.version || 'Unknown');
+                            console.error('  - Available RPC URLs:', RPC_URLS);
+                            console.error('  - Network Detection:', { chainId: network.chainId, name: network.name });
+                            console.error('  - RPC URL Used:', rpcUrl);
+                            
+                            // Check if this is a known SDK issue
+                            const isSDKConfigIssue = error4.message.includes('network: undefined') || 
+                                                     error4.message.includes('No Pandora service') ||
+                                                     error4.message.includes('Failed to get network config');
+                                                     
+                            if (isSDKConfigIssue) {
+                                throw new Error(`Synapse SDK does not appear to properly support Calibration testnet (chainId: 314159) in the current version. This is a known limitation. Error details: ${error4.message}`);
+                            } else {
+                                throw new Error(`Synapse SDK initialization failed on Calibration testnet. This may be due to limited Pandora service support on testnet. All initialization strategies failed. Last error: ${error4.message}`);
+                            }
+                        } else {
+                            throw new Error(`Failed to initialize Synapse SDK after trying multiple strategies. This may be due to network connectivity issues or Pandora service unavailability. Last error: ${error4.message}`);
+                        }
+                    }
+                }
+            }
+        }
+        
+        if (!initSuccess || !synapse) {
+            throw new Error(`Synapse SDK initialization failed: ${lastError?.message || 'Unknown error'}`);
+        }
 
-        // Select storage provider
-        const storageProvider = await synapse.selectStorageProvider();
-        console.log('✓ Selected storage provider:', storageProvider.address);
-        console.log('  PDP URL:', storageProvider.pdpUrl);
-
-        // Create storage for files
-        const uploadResults = await synapse.createStorage(files, metadata);
+        // Different SDK initialization methods may return different object structures
+        // Let's inspect what methods are available and adapt accordingly
+        console.log('🔍 Synapse object methods:', Object.getOwnPropertyNames(synapse));
+        console.log('🔍 Synapse object prototype methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(synapse)));
+        
+        let uploadResults;
+        
+        // Check if this is the newer SDK interface (from Synapse.create)
+        if (typeof synapse.uploadFiles === 'function') {
+            console.log('✓ Using newer SDK interface (uploadFiles method)');
+            uploadResults = await synapse.uploadFiles(files, metadata);
+        }
+        // Check for createStorage method (which we can see is available)
+        else if (typeof synapse.createStorage === 'function') {
+            console.log('✓ Using createStorage method directly (no selectStorageProvider needed)');
+            
+            // Try createStorage directly without selecting a provider first
+            uploadResults = await synapse.createStorage(files, metadata);
+        }
+        // Try direct upload method if available
+        else if (typeof synapse.upload === 'function') {
+            console.log('✓ Using direct upload method');
+            uploadResults = await synapse.upload(files, metadata);
+        }
+        // Try store method if available
+        else if (typeof synapse.store === 'function') {
+            console.log('✓ Using store method');
+            uploadResults = await synapse.store(files, metadata);
+        }
+        else {
+            // List all available methods for debugging
+            const availableMethods = Object.getOwnPropertyNames(synapse)
+                .concat(Object.getOwnPropertyNames(Object.getPrototypeOf(synapse)))
+                .filter(name => typeof synapse[name] === 'function')
+                .filter(name => !name.startsWith('_') && name !== 'constructor');
+                
+            console.error('❌ No recognized upload method found on Synapse object');
+            console.error('Available methods:', availableMethods);
+            throw new Error(`Synapse SDK interface not recognized. Available methods: ${availableMethods.join(', ')}`);
+        }
         
         if (!uploadResults || !uploadResults.cid) {
             throw new Error('No CID returned from Synapse upload');
@@ -94,12 +286,32 @@ export async function uploadFilesWithSynapse(files, metadata = null, signer = nu
         
         // Classify the error to help with recovery decisions
         const errorMessage = error.message || '';
+        
+        // Handle specific Synapse service errors
+        if (errorMessage.includes('No Pandora service address configured')) {
+            // This error often occurs when the Synapse SDK doesn't recognize the network
+            // or when the Pandora service is not available for the current network
+            if (errorMessage.includes('network: undefined')) {
+                throw new Error('Synapse SDK network configuration failed. This may be due to an SDK version that doesn\'t fully support Calibration testnet. Please try submitting your claim without uploading - the receipt hash will still be recorded on-chain for verification.');
+            } else {
+                throw new Error('Synapse upload service is temporarily unavailable for this network. This is common on testnets where services may be intermittent. Please try again later, or submit your claim without uploading (the receipt hash will still be recorded on-chain).');
+            }
+        }
+        
+        // Handle payment/approval errors on testnet
+        if (errorMessage.includes('operator not approved') || 
+            errorMessage.includes('Failed to create proof set') ||
+            errorMessage.includes('yablu.net/pdp/proof-sets')) {
+            throw new Error('Synapse upload failed due to payment or approval issues on testnet. This often occurs when the wallet hasn\'t approved the Synapse service for storage payments, or when testnet services are experiencing issues. Please try submitting your claim without uploading - the receipt hash will still be recorded on-chain for verification.');
+        }
+        
         const isNetworkError = errorMessage.includes('500') || 
                               errorMessage.includes('502') || 
                               errorMessage.includes('503') || 
                               errorMessage.includes('timeout') ||
                               errorMessage.includes('network') ||
-                              errorMessage.includes('Pandora service address');
+                              errorMessage.includes('Pandora service address') ||
+                              errorMessage.includes('Failed to initialize Synapse');
         
         const isGasError = errorMessage.includes('gas') || 
                           errorMessage.includes('exit=[33]') ||

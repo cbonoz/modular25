@@ -66,7 +66,7 @@ function CreatePolicy() {
 			description:
 				'Employees working from home are eligible for up to 50% reimbursement of monthly internet costs, with a maximum of $100 per month. Receipts must be submitted monthly with proof of internet service.',
 			businessType: 'technology',
-			location: 'California',
+			location: 'Massachusetts',
 			employeeCount: '11-50',
 			maxAmount: '100',
 			category: 'Internet'

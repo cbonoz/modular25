@@ -215,8 +215,31 @@ const PolicyDetail = ({ uploadId }) => {
 				});
 
 				console.log(`📤 Blocking upload on ${isMainnet ? 'mainnet' : 'testnet'} - waiting for response...`);
+				console.log('Chain info for upload:', { 
+					chainId: chain?.id, 
+					chainName: chain?.name,
+					filecoinMainnetId: filecoin.id,
+					isMainnetCheck: chain?.id === filecoin.id
+				});
+				console.log('Signer provider network:', signer?.provider?.network);
+				console.log('ACTIVE_CHAIN:', ACTIVE_CHAIN);
+				
+				// If chain is not available from wagmi, try to get it from the signer
+				let uploadChain = chain;
+				if (!uploadChain?.id && signer?.provider) {
+					try {
+						const network = await signer.provider.getNetwork();
+						uploadChain = { id: network.chainId, name: network.name };
+						console.log('Got chain from signer provider:', uploadChain);
+					} catch (e) {
+						console.warn('Could not get network from signer:', e);
+					}
+				}
+				
+				console.log('Final uploadChain being passed to Synapse:', uploadChain);
+				
 				try {
-					finalCid = await uploadFilesWithSynapse(files, null, signer, chain);
+					finalCid = await uploadFilesWithSynapse(files, null, signer, uploadChain);
 					console.log('✓ Synapse upload completed:', finalCid);
 					setUploadStatus({
 						status: 'success',
@@ -241,10 +264,21 @@ const PolicyDetail = ({ uploadId }) => {
 					} else {
 						// On testnet, allow proceeding without upload
 						console.log('⚠️ Synapse upload failed on testnet - continuing with claim submission using receipt hash only');
+						
+						// Check if it's a network/service issue that might be temporary
+						const isServiceIssue = error.message.includes('Pandora service') || 
+						                       error.message.includes('network') || 
+						                       error.message.includes('timeout') ||
+						                       error.message.includes('500') ||
+						                       error.message.includes('502') ||
+						                       error.message.includes('503');
+						
 						setUploadStatus(prev => ({
 							...prev,
 							allowProceed: true,
-							warningMessage: 'Upload failed on testnet. Proceeding with claim submission using receipt hash only.'
+							warningMessage: isServiceIssue 
+								? 'Upload service temporarily unavailable on testnet. Proceeding with claim submission using receipt hash only.'
+								: 'Upload failed on testnet. Proceeding with claim submission using receipt hash only.'
 						}));
 						finalCid = ''; // Continue without CID
 					}
