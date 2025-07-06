@@ -12,7 +12,7 @@ Going for the Modular worlds track and fresh code categories.
 
 Live demo app (deployed on filecoin calibration): https://clearedapp.vercel.app/
 
-Demo Video:
+Demo Video: https://youtu.be/_v2bU4TZ4_Q
 
 Example reimbursement policy:  https://clearedapp.vercel.app/upload/0x914ad568c5c3a2f803b0F7Af974e382BD994179F
 
