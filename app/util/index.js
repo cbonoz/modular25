@@ -439,70 +439,107 @@ export const handleContractError = (error, operationName = 'transaction') => {
 	throw new Error(`Failed to ${operationName}: ${errorMessage}`);
 };
 
-// Execute a contract transaction with retry logic
+// Execute a contract transaction with smart two-attempt strategy - prioritizes success on first try
 export const executeContractTransactionWithRetry = async (
 	contractMethod,
 	args = [],
 	operationName = 'transaction',
 	customGasStrategies = null
 ) => {
-	console.log(`Starting ${operationName} with smart gas strategy`);
+	console.log(`Starting ${operationName} with smart two-attempt strategy`);
 
-	// First attempt: Let MetaMask handle everything
+	// Pre-flight checks to catch obvious issues before any MetaMask prompts
+	console.log('Performing pre-flight validation...');
+	let estimatedGas = null;
+	
 	try {
-		console.log(`${operationName} attempt 1: Default MetaMask gas settings`);
-		const result = await contractMethod(...args);
-		console.log(`${operationName} transaction sent:`, result.hash);
-		await result.wait(); // Wait for transaction confirmation
-		console.log(`${operationName} transaction confirmed`);
-		return result;
-	} catch (firstError) {
-		console.log(`${operationName} first attempt failed:`, firstError.message);
+		if (contractMethod && typeof contractMethod.estimateGas === 'function') {
+			estimatedGas = await contractMethod.estimateGas(...args);
+			console.log(`✅ Pre-flight gas estimate successful: ${estimatedGas.toString()}`);
+		}
+	} catch (preflightError) {
+		console.log('⚠️ Pre-flight gas estimation failed:', preflightError.message);
+		
+		// If pre-flight fails with specific errors, fail fast without prompting user
+		if (preflightError.message?.includes('insufficient funds') && 
+		    !preflightError.message?.includes('gas')) {
+			throw new Error('Insufficient token funds detected. Please ensure you have enough tokens for this transaction.');
+		}
+		if (preflightError.message?.includes('execution reverted')) {
+			throw new Error('Transaction validation failed. Please check your inputs and contract state.');
+		}
+		if (preflightError.message?.includes('allowance')) {
+			throw new Error('Token allowance issue detected. Please ensure proper token approvals are in place.');
+		}
+		
+		// For gas estimation failures, we'll proceed but prepare for potential retry
+		console.log('Pre-flight failed but may be gas-related, proceeding with enhanced strategy');
+	}
 
-		// Only retry for specific MetaMask Internal JSON-RPC errors that might be gas-related
-		if (
-			firstError.message?.includes('Internal JSON-RPC error') ||
-			firstError.message?.includes('internal error')
-		) {
-			console.log(`${operationName} attempt 2: Using manual gas estimation with buffer`);
-
-			try {
-				// Second attempt: Try with manual gas estimation and buffer
-				let gasOptions = {};
-
-				try {
-					// Try to estimate gas and add a significant buffer
-					if (contractMethod && typeof contractMethod.estimateGas === 'function') {
-						const gasEstimate = await contractMethod.estimateGas(...args);
-						// Add 50% buffer to the gas estimate
-						gasOptions.gasLimit = gasEstimate.mul(150).div(100);
-						console.log(`Manual gas estimate for ${operationName}:`, gasEstimate.toString());
-						console.log(`Using gas limit with 50% buffer:`, gasOptions.gasLimit.toString());
-					} else {
-						// Fallback to a high gas limit for complex contract operations
-						gasOptions.gasLimit = 500000; // High but reasonable limit
-						console.log(`Using fallback high gas limit: ${gasOptions.gasLimit}`);
-					}
-				} catch (estimateError) {
-					// If estimation fails, use a conservative high limit
-					gasOptions.gasLimit = 500000;
-					console.log('Gas estimation failed, using conservative high limit:', gasOptions.gasLimit);
-				}
-
-				const result = await contractMethod(...args, gasOptions);
-				console.log(`${operationName} transaction sent (attempt 2):`, result.hash);
-				await result.wait(); // Wait for transaction confirmation
-				console.log(`${operationName} transaction confirmed (attempt 2)`);
-				return result;
-			} catch (secondError) {
-				console.error(`${operationName} second attempt also failed:`, secondError);
-				// Use the unified error handler for the second error
-				handleContractError(secondError, operationName);
-			}
+	// ATTEMPT 1: High-probability success approach
+	try {
+		console.log(`${operationName} attempt 1: Optimized approach (highest success probability)`);
+		
+		let gasOptions = {};
+		
+		if (estimatedGas) {
+			// We got a gas estimate, so use it with a reasonable buffer
+			gasOptions.gasLimit = estimatedGas.mul(140).div(100); // 40% buffer for safety
+			console.log(`Using pre-estimated gas with 40% buffer: ${gasOptions.gasLimit.toString()}`);
 		} else {
-			// For non-retryable errors, fail immediately with the first error
-			console.error(`${operationName} failed (non-retryable):`, firstError);
+			// No gas estimate available, but let's try with a conservative manual limit
+			// This often works better than letting MetaMask estimate on problematic networks
+			gasOptions.gasLimit = 600000; // Conservative but reasonable limit for most operations
+			console.log(`Using conservative manual gas limit: ${gasOptions.gasLimit}`);
+		}
+		
+		const result = await contractMethod(...args, gasOptions);
+		console.log(`✅ ${operationName} succeeded on first attempt:`, result.hash);
+		
+		await result.wait();
+		console.log(`✅ ${operationName} confirmed successfully`);
+		return result;
+		
+	} catch (firstError) {
+		console.log(`❌ ${operationName} first attempt failed:`, firstError.message);
+		
+		// Only retry for specific gas-related MetaMask errors that might succeed with different gas settings
+		const isGasRelatedError = 
+			firstError.message?.includes('Internal JSON-RPC error') ||
+			firstError.message?.includes('internal error') ||
+			firstError.message?.includes('gas estimation failed') ||
+			firstError.message?.includes('transaction may fail') ||
+			(firstError.message?.includes('insufficient funds') && firstError.message?.includes('gas'));
+		
+		if (!isGasRelatedError) {
+			// Not a gas issue, so retrying won't help - fail immediately
+			console.log('First attempt failed with non-retryable error, failing immediately');
 			handleContractError(firstError, operationName);
+			return; // This won't be reached due to throw in handleContractError
+		}
+		
+		// ATTEMPT 2: Fallback for gas-related issues
+		console.log(`${operationName} attempt 2: Gas issue fallback (let MetaMask handle everything)`);
+		
+		try {
+			// Complete opposite approach: let MetaMask handle all gas estimation
+			// This sometimes works when manual estimation fails
+			const result = await contractMethod(...args);
+			console.log(`✅ ${operationName} succeeded on second attempt:`, result.hash);
+			
+			await result.wait();
+			console.log(`✅ ${operationName} confirmed successfully on retry`);
+			return result;
+			
+		} catch (secondError) {
+			console.error(`❌ ${operationName} failed on both attempts. Final error:`, secondError.message);
+			
+			// Both attempts failed - provide the most helpful error message
+			// Use the second error if it's more specific, otherwise use the first
+			const errorToReport = secondError.message?.includes('user rejected') ? secondError : 
+								(firstError.message?.includes('Internal JSON-RPC') ? secondError : firstError);
+			
+			handleContractError(errorToReport, operationName);
 		}
 	}
 };

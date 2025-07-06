@@ -295,19 +295,62 @@ export const getUserUSDFCBalance = async (signer, userAddress) => {
 // Fund contract with USDFC
 export const fundContractWithUSDFC = async (signer, contractAddress, amountString) => {
     try {
-        console.log('=== Starting funding process ===');
+        console.log('=== Starting enhanced funding process ===');
         console.log('Funding contract - Input amount:', amountString);
+        
+        // Pre-validation checks
+        if (!signer) {
+            throw new Error('No signer available. Please ensure your wallet is connected.');
+        }
+        
+        if (!contractAddress || contractAddress === ethers.constants.AddressZero) {
+            throw new Error('Invalid contract address provided.');
+        }
+        
+        // Check network connectivity and ETH balance first with comprehensive validation
+        const userAddress = await signer.getAddress();
+        console.log('User address:', userAddress);
+        
+        // Comprehensive ETH balance check
+        try {
+            const ethBalance = await signer.getBalance();
+            const ethBalanceFormatted = ethers.utils.formatEther(ethBalance);
+            console.log('User ETH balance:', ethBalanceFormatted);
+            
+            // More strict ETH requirement check for complex transactions
+            const minEthRequired = ethers.utils.parseEther('0.02'); // Increased minimum for safety
+            if (ethBalance.lt(minEthRequired)) {
+                throw new Error(`Insufficient ETH for gas fees. You have ${ethBalanceFormatted} ETH but need at least 0.02 ETH for transaction fees. Please add more ETH to your wallet.`);
+            }
+        } catch (balanceError) {
+            if (balanceError.message.includes('Insufficient ETH')) {
+                throw balanceError; // Re-throw our custom error
+            }
+            console.warn('Could not check ETH balance:', balanceError.message);
+            throw new Error('Unable to verify ETH balance. Please ensure your wallet is connected and try again.');
+        }
         
         // Convert amount from string to proper units (18 decimals to match contract expectation)
         const amount = ethers.utils.parseUnits(amountString.toString(), 18);
         
-        // Get the current user's address for balance checking
-        const userAddress = await signer.getAddress();
-        console.log('User address:', userAddress);
+        // Validate amount is reasonable (not zero, not extremely large)
+        const maxReasonableAmount = ethers.utils.parseUnits('1000000', 18); // 1M USDFC max
+        if (amount.lte(0)) {
+            throw new Error('Funding amount must be greater than zero.');
+        }
+        if (amount.gt(maxReasonableAmount)) {
+            throw new Error('Funding amount is unreasonably large. Please check the amount and try again.');
+        }
         
-        // Check user's USDFC balance first
-        const userBalance = await getUserUSDFCBalance(signer, userAddress);
-        console.log('User USDFC balance:', ethers.utils.formatUnits(userBalance, 18));
+        // Check user's USDFC balance with better error handling
+        let userBalance;
+        try {
+            userBalance = await getUserUSDFCBalance(signer, userAddress);
+            console.log('User USDFC balance:', ethers.utils.formatUnits(userBalance, 18));
+        } catch (balanceCheckError) {
+            console.error('Failed to check USDFC balance:', balanceCheckError);
+            throw new Error('Unable to verify your USDFC balance. Please ensure you are connected to the correct network and try again.');
+        }
         
         if (userBalance.lt(amount)) {
             throw new Error(`Insufficient USDFC balance. You have ${ethers.utils.formatUnits(userBalance, 18)} USDFC but need ${amountString} USDFC.`);
@@ -394,11 +437,11 @@ export const fundContractWithUSDFC = async (signer, contractAddress, amountStrin
             console.log('Sufficient allowance already exists');
         }
 
-        // Use the contract's fundContract function with retry mechanism
+        // Use the contract's fundContract function with enhanced preparation
         const contract = new ethers.Contract(contractAddress, CLEARED_CONTRACT.abi, signer);
         console.log('Funding contract through fundContract function...');
         
-        // Double-check allowance right before the transaction
+        // Triple-check all conditions before executing the funding transaction
         const finalAllowance = await usdtcContract.allowance(userAddress, contractAddress);
         console.log('Final allowance check before funding:', ethers.utils.formatUnits(finalAllowance, 18));
         
@@ -406,8 +449,61 @@ export const fundContractWithUSDFC = async (signer, contractAddress, amountStrin
             throw new Error('Final allowance verification failed. The contract does not have permission to transfer your USDFC tokens. Please try the approval process again.');
         }
         
-        // Use the utility function for contract transaction
-        console.log('Executing fundContract transaction...');
+        // Comprehensive contract validation before attempting transaction
+        try {
+            // Verify contract is accessible and get owner info
+            const contractOwner = await contract.owner();
+            console.log('Contract accessibility verified, owner:', contractOwner);
+            
+            // Verify the current user is the owner
+            if (contractOwner.toLowerCase() !== userAddress.toLowerCase()) {
+                throw new Error('You are not the owner of this policy contract. Only the policy owner can fund the contract.');
+            }
+            
+            // Check if the policy is active
+            const metadata = await contract.getPolicyMetadata();
+            if (!metadata[2].isActive) {
+                throw new Error('This policy is currently inactive and cannot be funded. Please activate the policy first.');
+            }
+            
+        } catch (contractCheckError) {
+            if (contractCheckError.message.includes('You are not the owner') || 
+                contractCheckError.message.includes('policy is currently inactive')) {
+                throw contractCheckError; // Re-throw our custom validation errors
+            }
+            console.error('Contract validation failed:', contractCheckError.message);
+            throw new Error('Cannot access the policy contract. Please verify the contract address and ensure you are connected to the correct network.');
+        }
+        
+        // Final pre-flight validation: try to estimate gas for the funding transaction
+        console.log('Performing final pre-flight validation...');
+        try {
+            const gasEstimate = await contract.estimateGas.fundContract(amount);
+            console.log('✅ Pre-flight validation successful. Estimated gas:', gasEstimate.toString());
+        } catch (preEstimateError) {
+            console.error('❌ Pre-flight validation failed:', preEstimateError.message);
+            
+            // Analyze the pre-flight failure and provide specific guidance
+            if (preEstimateError.message?.includes('insufficient funds')) {
+                throw new Error('Pre-flight check failed: Insufficient funds for the transaction. Please ensure you have enough USDFC tokens and ETH for gas fees.');
+            }
+            if (preEstimateError.message?.includes('allowance')) {
+                throw new Error('Pre-flight check failed: Token allowance issue. Please ensure you have approved the contract to spend your USDFC tokens.');
+            }
+            if (preEstimateError.message?.includes('execution reverted')) {
+                throw new Error('Pre-flight check failed: The funding transaction would be rejected by the contract. Please verify all requirements are met.');
+            }
+            
+            // For other pre-flight failures, provide general guidance
+            throw new Error(`Pre-flight validation failed: ${preEstimateError.message}. The transaction would likely fail. Please check all requirements and try again.`);
+        }
+        
+        // Small delay to ensure network stability
+        console.log('All validations passed. Proceeding with funding transaction...');
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Execute the funding transaction (will show exactly ONE MetaMask prompt)
+        console.log('🚀 Requesting user confirmation for funding transaction...');
         const result = await executeContractTransactionWithRetry(
             contract.fundContract,
             [amount],
