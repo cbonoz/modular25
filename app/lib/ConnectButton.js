@@ -11,7 +11,14 @@ function ConnectButton({size='large', buttonType = 'primary', text = 'Connect Wa
   const { connect } = useConnect({
     connector: new InjectedConnector(),
   })
-  const { disconnect } = useDisconnect()
+  const { disconnect } = useDisconnect({
+    onSuccess: () => {
+      console.log('Successfully disconnected')
+    },
+    onError: (error) => {
+      console.error('Failed to disconnect:', error)
+    }
+  })
   const { chains, error, isLoading, pendingChainId, switchNetwork } =
   useSwitchNetwork()
   const [showNetworkWarning, setShowNetworkWarning] = useState(false)
@@ -42,13 +49,22 @@ function ConnectButton({size='large', buttonType = 'primary', text = 'Connect Wa
     }
   }
 
+  const handleDisconnect = async () => {
+    try {
+      console.log('Attempting to disconnect...')
+      await disconnect()
+    } catch (error) {
+      console.error('Error during disconnect:', error)
+    }
+  }
+
   if (isConnected) {
     return (
       <div>
         {!showNetworkWarning && (
           <div>
             <a href={getExplorerUrl(network?.chain?.id, address)} target="_blank">{abbreviate(address)}</a>
-            <Button type="link" size={size} onClick={() => disconnect()}>Disconnect</Button>
+            <Button type="link" size={size} onClick={handleDisconnect}>Disconnect</Button>
           </div>
         )}
 
@@ -57,7 +73,7 @@ function ConnectButton({size='large', buttonType = 'primary', text = 'Connect Wa
             <div style={{ marginBottom: '10px' }}>
               Connected to:&nbsp;
               <a href={getExplorerUrl(network?.chain?.id, address)} target="_blank">{abbreviate(address)}</a>
-              <Button type="link" size={size} onClick={() => disconnect()}>Disconnect</Button>
+              <Button type="link" size={size} onClick={handleDisconnect}>Disconnect</Button>
             </div>
             <div style={{ color: '#ff4d4f', fontSize: '12px' }}>
               Wrong network: {network?.chain?.name}
