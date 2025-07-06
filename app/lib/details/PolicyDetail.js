@@ -42,15 +42,14 @@ import {
 	fundContractWithUSDFC,
 	getFundingInfo,
 	withdrawFromContract,
-	getContractPasscodeStatus,
-	debugFundingPrerequisites
+	getContractPasscodeStatus
 } from '../../util/appContract';
 import { useAccount, useNetwork, useSwitchNetwork } from 'wagmi';
 import { useEthersSigner } from '../../hooks/useEthersSigner';
 import ConnectButton from '../ConnectButton';
 import { FileDrop } from '../FileDrop';
 import TextArea from 'antd/es/input/TextArea';
-import { InfoCircleOutlined } from '@ant-design/icons';
+import Icon, { InfoCircleOutlined } from '@ant-design/icons';
 import { uploadFilesWithSynapse } from '../../util/synapse';
 import { CLEARED_CONTRACT } from '@/util/metadata';
 
@@ -204,12 +203,8 @@ const PolicyDetail = ({ uploadId }) => {
 
 			const receiptHash = files[0].dataHash;
 
-			// Determine if we're on mainnet (Filecoin) - non-blocking uploads
-			// or testnet (Filecoin Calibration) - blocking uploads
+			// Both mainnet and testnet should be blocking (wait for upload response)
 			const isMainnet = chain?.id === filecoin.id;
-			const shouldBlock = shouldUpload && !isMainnet; // Block on testnet, non-blocking on mainnet
-
-			let uploadPromise = null;
 			let finalCid = '';
 
 			if (shouldUpload) {
@@ -219,80 +214,40 @@ const PolicyDetail = ({ uploadId }) => {
 					fileSize: files[0].size
 				});
 
-				if (shouldBlock) {
-					// BLOCKING: Wait for upload to complete before submitting claim (testnet)
-					console.log('📤 Blocking upload on testnet - waiting for completion...');
-					try {
-						finalCid = await uploadFilesWithSynapse(files, null, signer, chain);
-						console.log('✓ Synapse upload completed:', finalCid);
-						setUploadStatus({
-							status: 'success',
-							cid: finalCid,
-							fileName: files[0].name,
-							fileSize: files[0].size,
-							timestamp: new Date().toISOString()
-						});
-					} catch (error) {
-						console.error('✗ Synapse upload failed:', error);
-						setUploadStatus({
-							status: 'failed',
-							error: error.message,
-							fileName: files[0].name,
-							fileSize: files[0].size,
-							timestamp: new Date().toISOString()
-						});
+				console.log(`📤 Blocking upload on ${isMainnet ? 'mainnet' : 'testnet'} - waiting for response...`);
+				try {
+					finalCid = await uploadFilesWithSynapse(files, null, signer, chain);
+					console.log('✓ Synapse upload completed:', finalCid);
+					setUploadStatus({
+						status: 'success',
+						cid: finalCid,
+						fileName: files[0].name,
+						fileSize: files[0].size,
+						timestamp: new Date().toISOString()
+					});
+				} catch (error) {
+					console.error('✗ Synapse upload failed:', error.message);
+					setUploadStatus({
+						status: 'failed',
+						error: error.message,
+						fileName: files[0].name,
+						fileSize: files[0].size,
+						timestamp: new Date().toISOString()
+					});
 
-						// Check if this is a recoverable testnet issue
-						const isRecoverableTestnetIssue =
-							error.isNetworkIssue ||
-							error.isGasIssue ||
-							error.message?.includes('testnet') ||
-							error.message?.includes('500') ||
-							error.message?.includes('exit=[33]');
-
-						if (isRecoverableTestnetIssue) {
-							console.log(
-								'⚠️ Detected recoverable testnet issue - allowing claim submission without upload'
-							);
-							// Show warning but allow user to continue
-							setUploadStatus((prev) => ({
-								...prev,
-								allowProceed: true,
-								warningMessage:
-									'Upload failed due to testnet issues. You can proceed with claim submission using the receipt hash only.'
-							}));
-							finalCid = ''; // No CID, will use receipt hash only
-						} else {
-							// For non-recoverable errors, still fail
-							throw new Error(`Upload failed: ${error.message}`);
-						}
+					if (isMainnet) {
+						// On mainnet, if user wanted to upload and it fails, we should fail the entire process
+						throw new Error(`Upload failed on mainnet: ${error.message}. Please try again or submit without uploading.`);
+					} else {
+						// On testnet, allow proceeding without upload
+						console.log('⚠️ Synapse upload failed on testnet - continuing with claim submission using receipt hash only');
+						setUploadStatus(prev => ({
+							...prev,
+							allowProceed: true,
+							warningMessage: 'Upload failed on testnet. Proceeding with claim submission using receipt hash only.'
+						}));
+						finalCid = ''; // Continue without CID
 					}
-				} else {
-					// NON-BLOCKING: Start upload in background (mainnet)
-					console.log('📤 Non-blocking upload on mainnet - submitting claim immediately...');
-					uploadPromise = uploadFilesWithSynapse(files, null, signer, chain)
-						.then((cid) => {
-							console.log('✓ Synapse upload completed:', cid);
-							setUploadStatus({
-								status: 'success',
-								cid,
-								fileName: files[0].name,
-								fileSize: files[0].size,
-								timestamp: new Date().toISOString()
-							});
-							return cid;
-						})
-						.catch((error) => {
-							console.error('✗ Synapse upload failed:', error);
-							setUploadStatus({
-								status: 'failed',
-								error: error.message,
-								fileName: files[0].name,
-								fileSize: files[0].size,
-								timestamp: new Date().toISOString()
-							});
-							return ''; // Return empty CID on failure
-						});
 				}
 			}
 
@@ -303,7 +258,7 @@ const PolicyDetail = ({ uploadId }) => {
 				amount,
 				description,
 				receiptHash,
-				finalCid, // Will be populated if blocking upload, empty if non-blocking
+				finalCid,
 				passcode
 			);
 
@@ -315,22 +270,14 @@ const PolicyDetail = ({ uploadId }) => {
 				message: 'Reimbursement claim submitted successfully!',
 				amount: amount,
 				description: description,
-				uploadInProgress: shouldUpload && uploadPromise !== null,
-				uploadCompleted: shouldUpload && shouldBlock,
+				uploadInProgress: false, // Both networks are blocking now
+				uploadCompleted: shouldUpload && finalCid !== '',
+				uploadFailed: shouldUpload && finalCid === '',
 				network: isMainnet ? 'mainnet' : 'testnet'
 			});
 
 			// Refresh claims
 			await loadEmployeeClaims();
-
-			// If non-blocking upload was started, handle the result in background
-			if (uploadPromise) {
-				uploadPromise.then((cid) => {
-					if (cid) {
-						console.log('Background upload completed for claim, CID:', cid);
-					}
-				});
-			}
 		} catch (e) {
 			console.log('error submitting claim', e);
 			setError(humanError(e));
@@ -460,11 +407,7 @@ const PolicyDetail = ({ uploadId }) => {
 				throw new Error('Please enter a valid funding amount');
 			}
 
-			// First run debug to check prerequisites
-			console.log('Running funding prerequisites check with amount:', amount);
-			const debugInfo = await debugFundingPrerequisites(signer, uploadId, amount);
-
-			// If we reach here, debug completed - now try the actual funding
+			// Fund the contract directly
 			await fundContractWithUSDFC(signer, uploadId, amount);
 			setResult({
 				type: RESULT_MESSAGES.CONTRACT_FUNDED,
@@ -1069,12 +1012,19 @@ const PolicyDetail = ({ uploadId }) => {
 												fontFamily: 'monospace',
 												fontSize: '12px',
 												background: '#f5f5f5',
-												padding: '4px 8px',
+												padding: '4px 4px',
 												borderRadius: '4px',
 												marginTop: '4px'
 											}}
 										>
 											{uploadId}
+											<Button
+												type="link"
+												href={getExplorerUrl(ACTIVE_CHAIN, uploadId)}
+												target="_blank"
+											>
+												<Icon component={InfoCircleOutlined} />
+											</Button>
 										</div>
 									</div>
 								</Col>

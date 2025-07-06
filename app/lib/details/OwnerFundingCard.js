@@ -10,10 +10,10 @@ const OwnerFundingCard = ({
     userUSDFCBalance,
     usdcLoading,
     rpcLoading,
-    policyStatusLoading, // Add policy status loading state
+    policyStatusLoading,
     onFundContract,
     onWithdrawFromContract,
-    onFundingComplete // Add the new prop
+    onFundingComplete
 }) => {
     const [fundingAmount, setFundingAmount] = useState('');
     const [withdrawAmount, setWithdrawAmount] = useState('');
@@ -57,7 +57,7 @@ const OwnerFundingCard = ({
     };
 
     return (
-        <Card 
+        <Card
             title={
                 <span>
                     USDFC Balance & Funding
@@ -74,9 +74,9 @@ const OwnerFundingCard = ({
                 <>
                     <Row gutter={16} style={{ marginBottom: '16px' }}>
                         <Col span={12}>
-                            <div style={{ 
-                                background: '#f6ffed', 
-                                padding: '16px', 
+                            <div style={{
+                                background: '#f6ffed',
+                                padding: '16px',
                                 borderRadius: '8px',
                                 border: '1px solid #b7eb8f'
                             }}>
@@ -87,9 +87,9 @@ const OwnerFundingCard = ({
                             </div>
                         </Col>
                         <Col span={12}>
-                            <div style={{ 
-                                background: '#f0f8ff', 
-                                padding: '16px', 
+                            <div style={{
+                                background: '#f0f8ff',
+                                padding: '16px',
                                 borderRadius: '8px',
                                 border: '1px solid #91d5ff'
                             }}>

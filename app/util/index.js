@@ -96,6 +96,14 @@ export const humanError = err => {
   } else if (message.indexOf('network changed') !== -1) {
     message = 'Network changed since page loaded, please refresh.';
   }
+  // MetaMask-specific errors
+  else if (message.indexOf('Internal JSON-RPC error') !== -1 || message.indexOf('internal error') !== -1) {
+    message = 'MetaMask encountered an internal error. This often happens due to gas estimation issues. Please try again, or consider increasing your gas limit in MetaMask settings.';
+  } else if (message.indexOf('Unknown account') !== -1) {
+    message = 'MetaMask account not recognized. Please ensure your wallet is unlocked and connected.';
+  } else if (message.indexOf('invalid argument') !== -1 && message.indexOf('missing') !== -1) {
+    message = 'Invalid transaction parameters. Please refresh the page and try again.';
+  }
   // Gas and funding errors
   else if (message.indexOf('insufficient funds') !== -1 ||
            message.indexOf('gas required exceeds allowance') !== -1) {
@@ -106,6 +114,10 @@ export const humanError = err => {
   } else if (message.indexOf('ApplyWithGasOnState failed') !== -1 ||
              message.indexOf('actor not found') !== -1) {
     message = 'Transaction failed. Please check that you have sufficient funds for gas fees and try again.';
+  } else if (message.indexOf('nonce too low') !== -1) {
+    message = 'Transaction nonce error. Please reset your MetaMask account activity (Advanced -> Reset Account) and try again.';
+  } else if (message.indexOf('replacement transaction underpriced') !== -1) {
+    message = 'Transaction already pending with higher gas price. Please wait for the previous transaction to complete or increase the gas price.';
   }
   // User interaction errors
   else if (message.indexOf('user rejected') !== -1 ||
@@ -115,6 +127,8 @@ export const humanError = err => {
   // Contract interaction errors
   else if (message.indexOf('execution reverted') !== -1) {
     message = 'Transaction failed. Please check your inputs and try again.';
+  } else if (message.indexOf('contract not deployed') !== -1 || message.indexOf('contract does not exist') !== -1) {
+    message = 'Contract not found at this address. Please verify the contract address.';
   }
 
   return message;
@@ -127,26 +141,63 @@ export function bytesToSize(bytes) {
   return Math.round(bytes / Math.pow(1024, i), 2) + " " + sizes[i];
 }
 
-// Gas strategy configurations for transaction retries
+// Gas strategy configurations for transaction retries (reduced for better UX)
 export const getGasStrategies = () => [
-  // Strategy 1: No gas options (let MetaMask handle it)
+  // Strategy 1: Let MetaMask handle everything (most reliable)
   {},
-  // Strategy 2: Fixed moderate gas
-  {
-    gasLimit: 100000,
-    gasPrice: ethers.utils.parseUnits('1', 'gwei')
-  },
-  // Strategy 3: Higher gas limit
-  {
-    gasLimit: 150000,
-    gasPrice: ethers.utils.parseUnits('2', 'gwei')
-  },
-  // Strategy 4: Even higher gas
+  // Strategy 2: Conservative fallback with higher gas limit
   {
     gasLimit: 200000,
-    gasPrice: ethers.utils.parseUnits('3', 'gwei')
   }
 ];
+
+// Conservative gas strategies for funding operations (reduced retries)
+export const getFundingGasStrategies = () => [
+  // Strategy 1: Let MetaMask handle everything (most reliable)
+  {},
+  // Strategy 2: Conservative fallback with higher gas limit
+  {
+    gasLimit: 200000,
+  }
+];
+
+// Execute ERC20 approve with a single, reliable attempt
+export const executeApprovalWithRetry = async (tokenContract, spender, amount) => {
+  console.log('Starting ERC20 approval');
+  
+  try {
+    // Use a conservative gas limit that works for most ERC20 tokens
+    // Let MetaMask handle gas price estimation
+    const gasOptions = {
+      gasLimit: 80000 // Standard gas limit for ERC20 approve
+    };
+    
+    console.log('Approving USDFC spending with gas limit:', gasOptions.gasLimit);
+    
+    const result = await tokenContract.approve(spender, amount, gasOptions);
+    console.log('Approval transaction sent:', result.hash);
+    await result.wait();
+    console.log('Approval transaction confirmed');
+    return result;
+    
+  } catch (error) {
+    console.log('Initial approval failed, trying with max approval amount...');
+    
+    // If exact amount fails, try max uint256 (this often works better)
+    try {
+      const maxAmount = ethers.constants.MaxUint256;
+      const result = await tokenContract.approve(spender, maxAmount, { gasLimit: 100000 });
+      console.log('Max approval transaction sent:', result.hash);
+      await result.wait();
+      console.log('Max approval transaction confirmed');
+      return result;
+    } catch (maxError) {
+      console.log('Max approval also failed:', maxError.message);
+      // Handle the error from the original attempt for better user messaging
+      handleContractError(error, 'approve USDFC spending');
+    }
+  }
+};
 
 // Check if an error should trigger a retry
 export const shouldRetryTransaction = (error) => {
@@ -185,6 +236,26 @@ export const handleContractError = (error, operationName = 'transaction') => {
     throw new Error('Transaction was rejected by user.');
   }
   
+  // MetaMask-specific errors
+  if (errorMessage.includes('Internal JSON-RPC error') || errorMessage.includes('internal error')) {
+    if (operationName && operationName.includes('approve')) {
+      throw new Error('Token approval failed. This can happen due to network congestion or gas estimation issues. Please try again, and if the problem persists, try refreshing the page or increasing the gas limit manually in MetaMask.');
+    }
+    throw new Error('MetaMask encountered an internal error. This often happens due to gas estimation issues or network problems. Please try again, or consider refreshing the page. If the problem persists, try switching to a different network and back, or reset your MetaMask account.');
+  }
+  if (errorMessage.includes('Unknown account')) {
+    throw new Error('MetaMask account not recognized. Please ensure your wallet is unlocked and the correct account is selected.');
+  }
+  if (errorMessage.includes('invalid argument') && errorMessage.includes('missing')) {
+    throw new Error('Invalid transaction parameters detected. Please refresh the page and try again.');
+  }
+  if (errorMessage.includes('nonce too low')) {
+    throw new Error('Transaction nonce error. Please reset your MetaMask account activity (Settings > Advanced > Reset Account) and try again.');
+  }
+  if (errorMessage.includes('replacement transaction underpriced')) {
+    throw new Error('Transaction already pending with higher gas price. Please wait for the previous transaction to complete or increase the gas price in MetaMask.');
+  }
+  
   // Contract-specific validation errors
   if (errorMessage.includes('Amount exceeds policy maximum')) {
     throw new Error('Claim amount exceeds the policy maximum allowed amount.');
@@ -209,28 +280,38 @@ export const handleContractError = (error, operationName = 'transaction') => {
   if (errorMessage.includes('insufficient funds') || errorMessage.includes('insufficient balance')) {
     throw new Error('Insufficient funds for transaction fees. Please add more ETH to your wallet.');
   }
-  if (errorMessage.includes('transfer failed')) {
-    throw new Error('Token transfer failed. Please check your balance and allowance.');
+  if (errorMessage.includes('transfer failed') || errorMessage.includes('transfer amount exceeds')) {
+    throw new Error('Token transfer failed. Please check your USDFC balance and allowance. If the problem persists, try resetting the token allowance to 0 first.');
   }
   
   // Gas estimation errors
   if (errorMessage.includes('gas') || errorMessage.includes('estimate')) {
-    throw new Error('Unable to estimate gas fees. This usually means you need more funds in your wallet for transaction fees, or there may be an issue with the transaction parameters.');
+    throw new Error('Unable to estimate gas fees. This usually means you need more funds in your wallet for transaction fees, or there may be an issue with the transaction parameters. Try refreshing and attempting again.');
   }
   
   // Network connectivity errors
-  if (errorMessage.includes('Internal JSON-RPC error') || errorMessage.includes('network')) {
-    throw new Error('Network connectivity issue. Please try again in a few moments, or switch to a different RPC endpoint in MetaMask.');
+  if (errorMessage.includes('network') || errorMessage.includes('connection')) {
+    throw new Error('Network connectivity issue. Please check your internet connection and try again. If the problem persists, try switching to a different RPC endpoint in MetaMask.');
+  }
+  
+  // Contract deployment and existence errors
+  if (errorMessage.includes('contract not deployed') || errorMessage.includes('contract does not exist') || errorMessage.includes('code=CALL_EXCEPTION')) {
+    throw new Error('Contract not found or not accessible at this address. Please verify the contract address and ensure it\'s deployed on the current network.');
   }
   
   // Execution errors
   if (errorMessage.includes('execution failed') || errorMessage.includes('execution reverted')) {
-    throw new Error('Transaction failed. This may be due to insufficient allowance, insufficient balance, or invalid transaction parameters.');
+    throw new Error('Transaction failed during execution. This may be due to insufficient allowance, insufficient balance, or invalid transaction parameters. Please check all requirements and try again.');
   }
   
   // Check if it's already a formatted error message
   const formattedErrorPrefixes = [
     'Transaction was rejected',
+    'MetaMask encountered',
+    'MetaMask account not',
+    'Invalid transaction parameters',
+    'Transaction nonce error',
+    'Transaction already pending',
     'Claim amount exceeds',
     'This policy is currently',
     'Invalid passcode',
@@ -241,6 +322,7 @@ export const handleContractError = (error, operationName = 'transaction') => {
     'Token transfer failed',
     'Unable to estimate gas',
     'Network connectivity',
+    'Contract not found',
     'Transaction failed'
   ];
   
