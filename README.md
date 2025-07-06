@@ -104,3 +104,33 @@ Generates natural-language feedback explaining approval or denial outcomes.
 
 
 ### Screenshots
+
+#### Home Page
+The main landing page where users can view existing policies and create new reimbursement policies.
+
+![Home Page](screenshots/home_page.png)
+
+#### About Page
+Information about Cleared's mission and how the platform works.
+
+![About Page](screenshots/about_page.png)
+
+#### Create Policy
+Policy creation interface where employers define reimbursement rules and deploy smart contracts.
+
+![Create Policy](screenshots/create_policy.png)
+
+#### Contract Implementation
+Example of the deployed smart contract code showing the policy logic implementation.
+
+![Contract Snippet](screenshots/contract_snippet.png)
+
+#### Live Contract Example
+A real deployed contract on the Filecoin Calibration testnet demonstrating the platform in action.
+
+![Example Contract](screenshots/example_contract.png)
+
+#### Claim Rejection Flow
+Example of how rejected claims are handled with clear feedback to users.
+
+![Rejected Request](screenshots/rejected_request.png)
