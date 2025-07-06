@@ -1,6 +1,6 @@
 import { ethers } from 'ethers';
 import { CLEARED_CONTRACT } from './metadata';
-import { formatDate, handleContractError, executeContractTransactionWithRetry, validateTransactionInputs, getFundingGasStrategies, executeApprovalWithRetry } from '.';
+import { formatDate, handleContractError, executeContractTransactionWithRetry, validateTransactionInputs, executeApprovalWithRetry } from '.';
 import { USDFC_TOKEN_ADDRESS } from '../constants';
 
 // Helper function to hash passcode
@@ -267,15 +267,28 @@ export const updatePolicyStatus = async (signer, address, isActive) => {
 export const getUserUSDFCBalance = async (signer, userAddress) => {
     try {
         const contract = new ethers.Contract(USDFC_TOKEN_ADDRESS, [
-            'function balanceOf(address account) external view returns (uint256)'
+            'function balanceOf(address account) external view returns (uint256)',
+            'function symbol() external view returns (string)',
+            'function decimals() external view returns (uint8)'
         ], signer);
+
+        // Verify contract is accessible
+        try {
+            await contract.symbol();
+        } catch (contractError) {
+            console.error('USDFC contract verification failed in balance check:', contractError);
+            throw new Error('Unable to connect to USDFC token contract. Please check your network connection and try again.');
+        }
 
         const balance = await contract.balanceOf(userAddress);
         console.log('User USDFC balance:', balance.toString());
         return balance;
     } catch (error) {
         console.error('Error getting user USDFC balance:', error);
-        throw error;
+        if (error.message.includes('Unable to connect to USDFC')) {
+            throw error;
+        }
+        throw new Error('Failed to check USDFC balance. Please ensure you are connected to the correct network and try again.');
     }
 };
 
@@ -300,44 +313,81 @@ export const fundContractWithUSDFC = async (signer, contractAddress, amountStrin
             throw new Error(`Insufficient USDFC balance. You have ${ethers.utils.formatUnits(userBalance, 18)} USDFC but need ${amountString} USDFC.`);
         }
         
-        // Check current allowance
+        // Create USDFC token contract with comprehensive ERC20 ABI
         const usdtcContract = new ethers.Contract(USDFC_TOKEN_ADDRESS, [
+            // Standard ERC20 functions
             'function allowance(address owner, address spender) external view returns (uint256)',
             'function approve(address spender, uint256 amount) external returns (bool)',
             'function transfer(address to, uint256 amount) external returns (bool)',
-            'function transferFrom(address from, address to, uint256 amount) external returns (bool)'
+            'function transferFrom(address from, address to, uint256 amount) external returns (bool)',
+            'function balanceOf(address account) external view returns (uint256)',
+            'function totalSupply() external view returns (uint256)',
+            'function name() external view returns (string)',
+            'function symbol() external view returns (string)',
+            'function decimals() external view returns (uint8)',
+            // Events
+            'event Transfer(address indexed from, address indexed to, uint256 value)',
+            'event Approval(address indexed owner, address indexed spender, uint256 value)'
         ], signer);
         
-        const currentAllowance = await usdtcContract.allowance(userAddress, contractAddress);
-        console.log('Current allowance:', ethers.utils.formatUnits(currentAllowance, 18));
+        // Verify the contract is valid by checking if it has the required methods
+        try {
+            await usdtcContract.symbol();
+            console.log('USDFC contract interface verified successfully');
+        } catch (contractError) {
+            console.error('USDFC contract verification failed:', contractError);
+            throw new Error('Unable to connect to USDFC token contract. Please check your network connection and try again.');
+        }
+        
+        // Check current allowance with retry logic
+        let currentAllowance;
+        try {
+            currentAllowance = await usdtcContract.allowance(userAddress, contractAddress);
+            console.log('Current allowance:', ethers.utils.formatUnits(currentAllowance, 18));
+        } catch (allowanceError) {
+            console.warn('Failed to check current allowance, assuming zero allowance:', allowanceError.message);
+            currentAllowance = ethers.BigNumber.from(0);
+        }
         
         // If allowance is insufficient, approve the required amount
         if (currentAllowance.lt(amount)) {
             console.log('Insufficient allowance. Approving USDFC spend for contract:', contractAddress);
             
             try {
-                // Some tokens require resetting allowance to 0 first, but this can cause issues
-                // We'll try approval directly first, and only reset if that fails
-                console.log('Approving amount:', amount.toString());
+                console.log('Starting approval process...');
                 
-                // Use the specialized approval function with retry logic
+                // Use the specialized approval function with multiple retry strategies
                 const approvalResult = await executeApprovalWithRetry(usdtcContract, contractAddress, amount);
                 
                 console.log('USDFC approval confirmed:', approvalResult.hash);
                 
                 // Add a small delay to ensure the approval is fully propagated
-                await new Promise(resolve => setTimeout(resolve, 1500));
+                console.log('Waiting for approval to propagate...');
+                await new Promise(resolve => setTimeout(resolve, 2000));
                 
-                // Verify the approval went through
-                const newAllowance = await usdtcContract.allowance(userAddress, contractAddress);
-                console.log('New allowance after approval:', ethers.utils.formatUnits(newAllowance, 18));
-                
-                if (newAllowance.lt(amount)) {
-                    throw new Error('Approval verification failed. The allowance was not set correctly. Please try the funding process again.');
+                // Verify the approval went through (with error handling)
+                try {
+                    const newAllowance = await usdtcContract.allowance(userAddress, contractAddress);
+                    console.log('New allowance after approval:', ethers.utils.formatUnits(newAllowance, 18));
+                    
+                    if (newAllowance.lt(amount)) {
+                        console.warn('Allowance verification shows insufficient amount, but continuing with transfer attempt');
+                    }
+                } catch (verifyError) {
+                    console.warn('Could not verify new allowance, but continuing with transfer attempt:', verifyError.message);
                 }
                 
             } catch (approvalError) {
                 console.error('Approval process failed:', approvalError);
+                
+                // Don't wrap the error if it's already user-friendly from executeApprovalWithRetry
+                if (approvalError.message.includes('cancelled by user') ||
+                    approvalError.message.includes('Insufficient ETH balance') ||
+                    approvalError.message.includes('Token approval failed') ||
+                    approvalError.message.includes('MetaMask encountered an internal error')) {
+                    throw approvalError;
+                }
+                
                 throw new Error(`Failed to approve USDFC spending: ${approvalError.message}. Please try again or check your wallet settings.`);
             }
         } else {
@@ -356,13 +406,12 @@ export const fundContractWithUSDFC = async (signer, contractAddress, amountStrin
             throw new Error('Final allowance verification failed. The contract does not have permission to transfer your USDFC tokens. Please try the approval process again.');
         }
         
-        // Use the utility function for contract transaction with retry logic and funding gas strategies
+        // Use the utility function for contract transaction
         console.log('Executing fundContract transaction...');
         const result = await executeContractTransactionWithRetry(
             contract.fundContract,
             [amount],
-            'fund contract',
-            getFundingGasStrategies() // Use special gas strategies for funding
+            'fund contract'
         );
         
         console.log('=== Funding process completed successfully ===');

@@ -24,6 +24,12 @@ function UiLayoutWrapper({ children }) {
 				key: '/create',
 				label: <Link href="/create">Create Policy</Link>,
 				href: '/create'
+			},
+			{
+				// about
+				key: '/about',
+				label: <Link href="/about">About</Link>,
+				href: '/about'
 			}
 		];
 	}

@@ -161,45 +161,74 @@ export const getFundingGasStrategies = () => [
   }
 ];
 
-// Execute ERC20 approve with a single, reliable attempt
+// Execute ERC20 approve with a single attempt - no retries or fallbacks
 export const executeApprovalWithRetry = async (tokenContract, spender, amount) => {
-  console.log('Starting ERC20 approval');
+  console.log('Starting ERC20 approval for exact amount:', ethers.utils.formatUnits(amount, 18));
   
   try {
-    // Use a conservative gas limit that works for most ERC20 tokens
-    // Let MetaMask handle gas price estimation
-    const gasOptions = {
-      gasLimit: 80000 // Standard gas limit for ERC20 approve
-    };
+    // Let MetaMask handle gas estimation entirely to avoid conflicts
+    console.log('Approving exact USDFC spending amount (MetaMask will handle gas estimation)');
     
-    console.log('Approving USDFC spending with gas limit:', gasOptions.gasLimit);
-    
-    const result = await tokenContract.approve(spender, amount, gasOptions);
+    const result = await tokenContract.approve(spender, amount);
     console.log('Approval transaction sent:', result.hash);
-    await result.wait();
-    console.log('Approval transaction confirmed');
+    
+    // Wait for confirmation
+    const receipt = await result.wait();
+    console.log('Approval transaction confirmed in block:', receipt.blockNumber);
+    
     return result;
     
   } catch (error) {
-    console.log('Initial approval failed, trying with max approval amount...');
+    console.error('Approval failed:', error);
     
-    // If exact amount fails, try max uint256 (this often works better)
-    try {
-      const maxAmount = ethers.constants.MaxUint256;
-      const result = await tokenContract.approve(spender, maxAmount, { gasLimit: 100000 });
-      console.log('Max approval transaction sent:', result.hash);
-      await result.wait();
-      console.log('Max approval transaction confirmed');
-      return result;
-    } catch (maxError) {
-      console.log('Max approval also failed:', maxError.message);
-      // Handle the error from the original attempt for better user messaging
-      handleContractError(error, 'approve USDFC spending');
+    // Handle user rejection
+    if (error.code === 4001) {
+      throw new Error('Transaction was cancelled by user. Please try again when ready to approve USDFC spending.');
     }
+    
+    // Handle MetaMask Internal JSON-RPC errors specifically
+    if (error.message?.includes('Internal JSON-RPC error') || error.message?.includes('internal error')) {
+      // Try to get the underlying error details
+      const underlyingError = error.data?.message || error.data?.originalError?.message || error.reason;
+      
+      console.error('MetaMask Internal JSON-RPC Error Details:', {
+        message: error.message,
+        data: error.data,
+        reason: error.reason,
+        code: error.code,
+        underlyingError: underlyingError
+      });
+      
+      if (underlyingError?.includes('insufficient funds')) {
+        throw new Error('Insufficient ETH balance to pay for approval transaction gas fees. Please add ETH to your wallet and try again.');
+      }
+      
+      if (underlyingError?.includes('gas') || underlyingError?.includes('out of gas')) {
+        throw new Error('Gas estimation failed for token approval. This may be due to insufficient ETH balance or network congestion. Please ensure you have enough ETH for gas fees and try again.');
+      }
+      
+      if (underlyingError?.includes('execution reverted') || underlyingError?.includes('revert')) {
+        throw new Error('Token approval was rejected by the contract. This could be due to an invalid token address or contract issue. Please contact support if this persists.');
+      }
+      
+      // Generic MetaMask internal error with more specific guidance
+      throw new Error('MetaMask encountered an internal error during token approval. This often happens due to gas estimation issues or network problems. Please try: 1) Refreshing the page and trying again, 2) Increasing gas limit in MetaMask advanced settings, or 3) Switching networks and back in MetaMask.');
+    }
+    
+    if (error.message?.includes('insufficient funds')) {
+      throw new Error('Insufficient ETH balance to pay for approval transaction gas fees. Please add ETH to your wallet and try again.');
+    }
+    
+    if (error.message?.includes('gas')) {
+      throw new Error('Token approval failed due to gas estimation issues. Please try again, and if the problem persists, try increasing the gas limit manually in MetaMask.');
+    }
+    
+    // Generic approval error - provide clear guidance for user to retry
+    throw new Error('Token approval failed. This can happen due to network congestion or gas estimation issues. Please try again, and if the problem persists, try refreshing the page or increasing the gas limit manually in MetaMask.');
   }
 };
 
-// Check if an error should trigger a retry
+// Check if an error should trigger a user retry (for UI messaging purposes)
 export const shouldRetryTransaction = (error) => {
   // Don't retry for user rejections
   if (error.message.includes('user rejected') || error.code === 4001) {
@@ -216,6 +245,7 @@ export const shouldRetryTransaction = (error) => {
     return false;
   }
   
+  // For all other errors, suggest user can retry manually
   return true;
 };
 
@@ -341,53 +371,35 @@ export const executeContractTransactionWithRetry = async (
   operationName = 'transaction',
   customGasStrategies = null
 ) => {
-  const gasStrategies = customGasStrategies || getGasStrategies();
-  let lastError;
+  console.log(`Starting ${operationName} with single attempt (no retries)`);
   
-  for (let i = 0; i < gasStrategies.length; i++) {
-    const gasOptions = gasStrategies[i];
-    console.log(`${operationName} attempt ${i + 1}/${gasStrategies.length} with gas options:`, gasOptions);
-    
+  try {
+    // Try to estimate gas first (optional, for debugging)
     try {
-      // Try to estimate gas first (optional, for debugging)
-      try {
-        // Check if the contractMethod has estimateGas available
-        if (contractMethod && typeof contractMethod.estimateGas === 'function') {
-          const gasEstimate = await contractMethod.estimateGas(...args);
-          console.log(`Gas estimate for ${operationName}:`, gasEstimate.toString());
-        } else {
-          console.log('Gas estimation not available for this method');
-        }
-      } catch (estimateError) {
-        console.log('Gas estimation failed:', estimateError.message);
-        // Continue anyway - estimation failure doesn't mean transaction will fail
+      // Check if the contractMethod has estimateGas available
+      if (contractMethod && typeof contractMethod.estimateGas === 'function') {
+        const gasEstimate = await contractMethod.estimateGas(...args);
+        console.log(`Gas estimate for ${operationName}:`, gasEstimate.toString());
+      } else {
+        console.log('Gas estimation not available for this method');
       }
-      
-      const result = await contractMethod(...args, gasOptions);
-      console.log(`${operationName} transaction sent:`, result.hash);
-      await result.wait(); // Wait for transaction confirmation
-      console.log(`${operationName} transaction confirmed`);
-      return result;
-      
-    } catch (error) {
-      console.log(`${operationName} attempt ${i + 1} failed:`, error.message);
-      lastError = error;
-      
-      // Check if we should retry this error
-      if (!shouldRetryTransaction(error)) {
-        break; // Exit retry loop for non-retryable errors
-      }
-      
-      // Wait a bit before retrying (except on last attempt)
-      if (i < gasStrategies.length - 1) {
-        console.log('Waiting 2 seconds before retry...');
-        await new Promise(resolve => setTimeout(resolve, 2000));
-      }
+    } catch (estimateError) {
+      console.log('Gas estimation failed:', estimateError.message);
+      // Continue anyway - estimation failure doesn't mean transaction will fail
     }
+    
+    // Let MetaMask handle gas settings entirely to avoid conflicts
+    const result = await contractMethod(...args);
+    console.log(`${operationName} transaction sent:`, result.hash);
+    await result.wait(); // Wait for transaction confirmation
+    console.log(`${operationName} transaction confirmed`);
+    return result;
+    
+  } catch (error) {
+    console.error(`${operationName} failed:`, error);
+    // Use the unified error handler for consistent error messages
+    handleContractError(error, operationName);
   }
-  
-  // Handle the final error
-  handleContractError(lastError, operationName);
 };
 
 // Validate common input parameters

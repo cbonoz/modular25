@@ -41,15 +41,46 @@ const ResultCard = ({ result, uploadStatus }) => {
                         </div>
                     )}
                     {uploadStatus.status === 'failed' && (
-                        <div>
-                            <p style={{ color: 'red', fontWeight: 'bold' }}>
-                                ❌ Receipt upload failed
+                        <div style={{ 
+                            backgroundColor: '#fffbe6', 
+                            border: '1px solid #d4851b', 
+                            borderRadius: '6px', 
+                            padding: '16px' 
+                        }}>
+                            <p style={{ color: '#d4851b', fontWeight: 'bold', marginBottom: '8px' }}>
+                                ⚠️ Receipt upload was not completed
                             </p>
-                            <p>File: {uploadStatus.fileName}</p>
-                            <p>Error: {uploadStatus.error}</p>
-                            <p>Timestamp: {new Date(uploadStatus.timestamp).toLocaleString()}</p>
-                            <p style={{ color: 'orange' }}>
-                                ⚠️ Your claim was still submitted successfully with the receipt hash.
+                            <p style={{ marginBottom: '4px' }}>File: {uploadStatus.fileName}</p>
+                            <p style={{ marginBottom: '8px', fontSize: '14px', color: '#666' }}>
+                                {uploadStatus.error}
+                            </p>
+                            <div style={{ 
+                                backgroundColor: '#f6ffed', 
+                                border: '1px solid #b7eb8f', 
+                                borderRadius: '4px', 
+                                padding: '12px', 
+                                marginTop: '12px' 
+                            }}>
+                                <p style={{ color: '#52c41a', fontWeight: 'bold', marginBottom: '8px' }}>
+                                    ✅ Your claim was still submitted successfully
+                                </p>
+                                <p style={{ color: '#389e0d', fontSize: '14px', marginBottom: '8px' }}>
+                                    The receipt hash has been recorded on-chain for verification.
+                                </p>
+                                <p style={{ color: '#389e0d', fontSize: '14px' }}>
+                                    💡 <strong>Tip:</strong> To enable file uploads, please activate your wallet address at{' '}
+                                    <a 
+                                        href="https://fs-upload-dapp.netlify.app/" 
+                                        target="_blank" 
+                                        rel="noopener noreferrer"
+                                        style={{ color: '#1890ff', textDecoration: 'underline' }}
+                                    >
+                                        fs-upload-dapp.netlify.app
+                                    </a>
+                                </p>
+                            </div>
+                            <p style={{ fontSize: '12px', color: '#8c8c8c', marginTop: '8px' }}>
+                                {new Date(uploadStatus.timestamp).toLocaleString()}
                             </p>
                         </div>
                     )}
