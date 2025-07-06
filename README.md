@@ -36,7 +36,7 @@ Submit Receipts
 Employees receive a unique link to submit receipts and optional metadata. Submissions are stored on Filecoin/IPFS for permanent, auditable access.
 
 Contract-based Evaluation
-Each submission is validated against the policy logic. Humans can review and reimburse requests either from the app or by listening to events emitted from the policy smart contracg.
+Each submission is validated against the policy logic. Humans can review and reimburse requests either from the app or by listening to events emitted from the policy smart contract. Note the automated review in the demo is based off the policy rules and constraints and could be extended to work from an LLM.
 
 Reimburse or Notify
 If approved, funds are transferred (or queued for payment), and all actions are logged immutably. Denied claims include a transparent reason and proof trail.
