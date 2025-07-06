@@ -38,6 +38,7 @@ Reimburse or Notify
 If approved, funds are transferred (or queued for payment), and all actions are logged immutably. Denied claims include a transparent reason and proof trail.
 
 ### Using the application
+
 1. Connect your wallet as an employer. You can set up as many reimbursement policy pages as you wish.
 2. Get testnet USDFC (if on testnet) using this <a href="https://docs.secured.finance/usdfc-stablecoin/getting-started/getting-test-usdfc-on-testnet">guide</a>.
 3. Share the url with employees. Users can submit claims through the url until the contract is deactivated or out of funds.
@@ -71,16 +72,24 @@ Generates natural-language feedback explaining approval or denial outcomes.
 
 ### Challenges We Ran Into
 
-Translating real-world reimbursement policies and compliance laws into deterministic, on-chain logic.
+1. Translating real-world reimbursement policies and compliance laws into deterministic, on-chain logic.
 
-Normalizing and validating uploaded receipt data for consistent smart contract evaluation.
+2. Normalizing and validating uploaded receipt data for consistent smart contract evaluation.
 
-Designing a decentralized, seamless UX without requiring user accounts or third-party integrations.
+3. Designing a decentralized, seamless UX without requiring user accounts or third-party integrations.
 
 ### Potential Future Work
 
-Develop a reusable policy schema language (e.g., JSON/YAML) for writing and updating reimbursement rules.
+1. Develop a reusable policy schema language (e.g., JSON/YAML) for writing and updating reimbursement rules.
 
-Integrate ZK-proofs or confidential attestations for private reimbursements while maintaining auditability.
+2. Integrate ZK-proofs or confidential attestations for private reimbursements while maintaining auditability.
 
-Expand Cleared’s library of global policy templates, allowing teams to select rules by country, state, or industry sector.
+3. Expand Cleared’s library of global policy templates, allowing teams to select rules by country, state, or industry sector.
+
+
+### Production deployment
+
+`yarn build:prod`: build for filecoin mainnet
+
+
+### Screenshots
