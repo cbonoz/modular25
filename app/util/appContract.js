@@ -449,27 +449,22 @@ export const fundContractWithUSDFC = async (signer, contractAddress, amountStrin
             throw new Error('Final allowance verification failed. The contract does not have permission to transfer your USDFC tokens. Please try the approval process again.');
         }
         
-        // Comprehensive contract validation before attempting transaction
+        // Basic contract validation before attempting transaction (assuming caller is owner)
         try {
-            // Verify contract is accessible and get owner info
-            const contractOwner = await contract.owner();
-            console.log('Contract accessibility verified, owner:', contractOwner);
-            
-            // Verify the current user is the owner
-            if (contractOwner.toLowerCase() !== userAddress.toLowerCase()) {
-                throw new Error('You are not the owner of this policy contract. Only the policy owner can fund the contract.');
-            }
+            // Verify contract is accessible by getting policy metadata
+            const metadata = await contract.getPolicyMetadata();
+            console.log('✅ Contract accessibility verified via getPolicyMetadata');
             
             // Check if the policy is active
-            const metadata = await contract.getPolicyMetadata();
             if (!metadata[2].isActive) {
                 throw new Error('This policy is currently inactive and cannot be funded. Please activate the policy first.');
             }
             
+            console.log('✅ Policy is active and ready for funding');
+            
         } catch (contractCheckError) {
-            if (contractCheckError.message.includes('You are not the owner') || 
-                contractCheckError.message.includes('policy is currently inactive')) {
-                throw contractCheckError; // Re-throw our custom validation errors
+            if (contractCheckError.message.includes('policy is currently inactive')) {
+                throw contractCheckError; // Re-throw our custom validation error
             }
             console.error('Contract validation failed:', contractCheckError.message);
             throw new Error('Cannot access the policy contract. Please verify the contract address and ensure you are connected to the correct network.');
